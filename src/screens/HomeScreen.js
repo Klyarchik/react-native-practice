@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Switch } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import CustomSwitch from '../components/CustomSwitch';
 
-// Импортируем все иконки
+// Импортируем иконки (замените на PNG или используйте текстовые иконки)
 import HomeIcon from '../../assets/Image/main.svg';
 import HomeActiveIcon from '../../assets/Image/mainActive.svg';
 import CatalogIcon from '../../assets/Image/catalog.svg';
@@ -13,17 +14,118 @@ import ProjectActiveIcon from '../../assets/Image/projectActive.svg';
 import ProfileIcon from '../../assets/Image/profile.svg';
 import ProfileActiveIcon from '../../assets/Image/profileActive.svg';
 
+// ============ МАЛЕНЬКИЕ КОМПОНЕНТЫ ДЛЯ КАЖДОЙ ВКЛАДКИ ============
+
+// Компонент для главной страницы
+const HomeContent = ({ userName, userEmail }) => (
+  <View style={styles.contentContainer}>
+    <View style={styles.headerSection}>
+      <Text style={styles.userName}>{userName}</Text>
+      <Text style={styles.userEmail}>{userEmail}</Text>
+    </View>
+    
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>Популярные проекты</Text>
+      <Text style={styles.cardText}>Здесь будут отображаться популярные проекты</Text>
+    </View>
+
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>Рекомендации</Text>
+      <Text style={styles.cardText}>Персонализированные рекомендации для вас</Text>
+    </View>
+
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>Новинки</Text>
+      <Text style={styles.cardText}>Свежие проекты и обновления</Text>
+    </View>
+  </View>
+);
+
+// Компонент для каталога
+const CatalogContent = () => (
+  <View style={styles.centerContent}>
+    <Text style={styles.bigEmoji}>📋</Text>
+    <Text style={styles.title}>Каталог</Text>
+    <Text style={styles.subtitle}>Здесь будет каталог проектов</Text>
+  </View>
+);
+
+// Компонент для проектов
+const ProjectContent = () => (
+  <View style={styles.centerContent}>
+    <Text style={styles.bigEmoji}>📁</Text>
+    <Text style={styles.title}>Проекты</Text>
+    <Text style={styles.subtitle}>Здесь будут ваши проекты</Text>
+  </View>
+);
+
+// Компонент для профиля
+const ProfileContent = ({ userName, userEmail, notificationsEnabled, toggleNotifications, clearAsyncStorage }) => (
+  <View style={styles.contentContainer}>
+    <View style={styles.headerSection}>
+      <Text style={styles.userName}>{userName}</Text>
+      <Text style={styles.userEmail}>{userEmail}</Text>
+    </View>
+
+    {/* Кнопка Мои заказы */}
+    <TouchableOpacity style={styles.ordersButton}>
+      <Image 
+        source={require('../../assets/Image/notebook.png')} 
+        style={styles.ordersButtonIcon}
+      />
+      <Text style={styles.ordersButtonText}>Мои заказы</Text>
+    </TouchableOpacity>
+
+    {/* Секция уведомлений */}
+    <View style={styles.notificationsContainer}>
+      <View style={styles.notificationsLeftContainer}>
+        <Image 
+          source={require('../../assets/Image/settings.png')} 
+          style={styles.notificationsIcon}
+        />
+        <Text style={styles.notificationsText}>Уведомления</Text>
+      </View>
+      <CustomSwitch 
+        value={notificationsEnabled}
+        onValueChange={toggleNotifications}
+      />
+    </View>
+
+    {/* Блок с юридической информацией и выходом */}
+    <View style={styles.bottomBlock}>
+      <TouchableOpacity>
+        <Text style={styles.legalText}>Политика конфиденциальности</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.legalLink}>
+        <Text style={styles.legalText}>Пользовательское соглашение</Text>
+      </TouchableOpacity>
+      <TouchableOpacity 
+        style={styles.logoutButton}
+        onPress={clearAsyncStorage}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.logoutButtonText}>Выход</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+);
+
+// ============ ОСНОВНОЙ КОМПОНЕНТ ============
+
 export default function HomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const [userName, setUserName] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [activeTab, setActiveTab] = useState('profile'); // 'home', 'catalog', 'project', 'profile'
+  const [activeTab, setActiveTab] = useState('home');
 
+  // Загружаем данные при монтировании компонента
   useEffect(() => {
     loadUserData();
+    loadNotificationSetting(); // 👈 Загружаем настройку уведомлений
   }, []);
 
+  // Загрузка данных пользователя
   const loadUserData = async () => {
     try {
       const userId = await AsyncStorage.getItem("userId");
@@ -41,28 +143,50 @@ export default function HomeScreen({ navigation }) {
       );
 
       const data = await response.json();
-      const firstName = data.first_name;
-      const email = data.email;
-
-      setUserName(firstName);
-      setUserEmail(email);
+      setUserName(data.first_name);
+      setUserEmail(data.email);
     } catch (error) {
       console.error('Ошибка загрузки данных:', error);
     }
+  };
+
+  // 👇 НОВАЯ ФУНКЦИЯ: Загрузка настройки уведомлений
+  const loadNotificationSetting = async () => {
+    try {
+      const savedNotificationSetting = await AsyncStorage.getItem('notificationsEnabled');
+      if (savedNotificationSetting !== null) {
+        setNotificationsEnabled(JSON.parse(savedNotificationSetting));
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки настройки уведомлений:', error);
+    }
+  };
+
+  // 👇 НОВАЯ ФУНКЦИЯ: Сохранение настройки уведомлений
+  const saveNotificationSetting = async (value) => {
+    try {
+      await AsyncStorage.setItem('notificationsEnabled', JSON.stringify(value));
+    } catch (error) {
+      console.error('Ошибка сохранения настройки уведомлений:', error);
+    }
+  };
+
+  // Обновленная функция переключения уведомлений
+  const toggleNotifications = () => {
+    setNotificationsEnabled(previousState => {
+      const newState = !previousState;
+      saveNotificationSetting(newState); // 👈 Сохраняем новое состояние
+      return newState;
+    });
   };
 
   const clearAsyncStorage = async () => {
     try {
       await AsyncStorage.clear();
       navigation.replace('Login');
-      console.log("Локальное хранилище было очищено");
     } catch (error) {
       Alert.alert("Что-то пошло не так при очистке данных");
     }
-  };
-
-  const toggleNotifications = () => {
-    setNotificationsEnabled(previousState => !previousState);
   };
 
   // Функция для отображения правильной иконки
@@ -94,52 +218,26 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  const renderTabContent = () => {
-    return (
-      <>
-        {/* Верхняя часть с именем и почтой */}
-        <View style={styles.headerSection}>
-          <Text style={styles.userName}>{userName}</Text>
-          <Text style={styles.userEmail}>{userEmail}</Text>
-        </View>
-
-        {/* Кнопка Мои заказы */}
-        <TouchableOpacity style={styles.ordersButton}>
-          <Text style={styles.ordersButtonText}>Мои заказы</Text>
-        </TouchableOpacity>
-
-        {/* Уведомления с переключателем */}
-        <View style={styles.notificationsSection}>
-          <Text style={styles.notificationsText}>Уведомления</Text>
-          <Switch
-            trackColor={{ false: "#E5E5E5", true: "#1A6FEE" }}
-            thumbColor={notificationsEnabled ? "#FFFFFF" : "#f4f3f4"}
-            ios_backgroundColor="#E5E5E5"
-            onValueChange={toggleNotifications}
-            value={notificationsEnabled}
-          />
-        </View>
-
-        {/* Юридическая информация */}
-        <View style={styles.legalSection}>
-          <TouchableOpacity>
-            <Text style={styles.legalText}>Политика конфиденциальности</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.legalLink}>
-            <Text style={styles.legalText}>Пользовательское соглашение</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Красная кнопка выхода */}
-        <TouchableOpacity 
-          style={styles.logoutButton}
-          onPress={clearAsyncStorage}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.logoutButtonText}>Выход</Text>
-        </TouchableOpacity>
-      </>
-    );
+  // Рендерим активный компонент
+  const renderActiveContent = () => {
+    switch (activeTab) {
+      case 'home':
+        return <HomeContent userName={userName} userEmail={userEmail} />;
+      case 'catalog':
+        return <CatalogContent />;
+      case 'project':
+        return <ProjectContent />;
+      case 'profile':
+        return <ProfileContent 
+          userName={userName} 
+          userEmail={userEmail}
+          notificationsEnabled={notificationsEnabled}
+          toggleNotifications={toggleNotifications}
+          clearAsyncStorage={clearAsyncStorage}
+        />;
+      default:
+        return <HomeContent userName={userName} userEmail={userEmail} />;
+    }
   };
 
   return (
@@ -154,46 +252,40 @@ export default function HomeScreen({ navigation }) {
         },
       ]}
     >
-      <View style={styles.contentContainer}>
-        {/* Основной контент */}
-        <View style={styles.mainContent}>
-          {renderTabContent()}
-        </View>
+      {/* Основной контент */}
+      <View style={styles.mainContent}>
+        {renderActiveContent()}
+      </View>
 
-        {/* Нижняя навигация (4 вкладки) - ТОЛЬКО ИКОНКИ, БЕЗ ТЕКСТА */}
-        <View style={[styles.bottomNavigation, { paddingBottom: insets.bottom }]}>
-          {/* Главная */}
-          <TouchableOpacity 
-            style={styles.tabItem}
-            onPress={() => setActiveTab('home')}
-          >
-            {renderIcon('home')}
-          </TouchableOpacity>
+      {/* Нижняя навигация */}
+      <View style={[styles.bottomNavigation, { paddingBottom: insets.bottom }]}>
+        <TouchableOpacity 
+          style={styles.tabItem}
+          onPress={() => setActiveTab('home')}
+        >
+          {renderIcon('home')}
+        </TouchableOpacity>
 
-          {/* Каталог */}
-          <TouchableOpacity 
-            style={styles.tabItem}
-            onPress={() => setActiveTab('catalog')}
-          >
-            {renderIcon('catalog')}
-          </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.tabItem}
+          onPress={() => setActiveTab('catalog')}
+        >
+          {renderIcon('catalog')}
+        </TouchableOpacity>
 
-          {/* Проекты */}
-          <TouchableOpacity 
-            style={styles.tabItem}
-            onPress={() => setActiveTab('project')}
-          >
-            {renderIcon('project')}
-          </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.tabItem}
+          onPress={() => setActiveTab('project')}
+        >
+          {renderIcon('project')}
+        </TouchableOpacity>
 
-          {/* Профиль */}
-          <TouchableOpacity 
-            style={styles.tabItem}
-            onPress={() => setActiveTab('profile')}
-          >
-            {renderIcon('profile')}
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity 
+          style={styles.tabItem}
+          onPress={() => setActiveTab('profile')}
+        >
+          {renderIcon('profile')}
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -204,14 +296,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  contentContainer: {
-    flex: 1,
-    justifyContent: 'space-between',
-  },
   mainContent: {
+    flex: 1,
+  },
+  contentContainer: {
     flex: 1,
     paddingHorizontal: 24,
     paddingTop: 24,
+  },
+  centerContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
   },
   headerSection: {
     marginBottom: 24,
@@ -225,44 +322,98 @@ const styles = StyleSheet.create({
   userEmail: {
     fontSize: 16,
     color: '#939396',
+    marginBottom: 24,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#939396',
+    textAlign: 'center',
+  },
+  bigEmoji: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  card: {
+    backgroundColor: '#F5F5F9',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 8,
+  },
+  cardText: {
+    fontSize: 14,
+    color: '#939396',
+    lineHeight: 20,
   },
   ordersButton: {
-    backgroundColor: '#F5F5F9',
+    backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
+    marginBottom: 10,
     alignItems: 'center',
+    flexDirection: 'row', // Добавлено для расположения иконки и текста в ряд
+  },
+  ordersButtonIcon: {
+    width: 32,
+    height: 32,
+    marginRight: 20, // Отступ между иконкой и текстом
+    resizeMode: 'contain',
   },
   ordersButtonText: {
     fontSize: 17,
     fontWeight: '600',
     color: '#000000',
+    
   },
-  notificationsSection: {
+  // Добавьте этот стиль в объект styles
+  notificationsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-    marginBottom: 24,
+    marginBottom: 24
+    // ПОЛОСЫ УБРАНЫ! Только отступы
+  },
+  notificationsLeftContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  notificationsIcon: {
+    width: 32,
+    height: 32,
+    marginRight: 20,
+    resizeMode: 'contain',
   },
   notificationsText: {
     fontSize: 17,
     color: '#000000',
-    fontWeight: '500',
+    fontWeight: '600',
   },
-  legalSection: {
+  bottomBlock: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginTop: 122, // Отступ сверху от предыдущего контента
   },
   legalLink: {
-    marginTop: 12,
+    marginTop: 24, // Междустрочный интервал 24px
   },
   legalText: {
     fontSize: 15,
+    fontWeight: '500',
     color: '#939396',
     textAlign: 'center',
   },
@@ -278,7 +429,7 @@ const styles = StyleSheet.create({
   logoutButtonText: {
     color: '#FD3535',
     textAlign: 'center',
-    fontWeight: 'bold',
+    fontWeight: '500',
     fontSize: 17,
   },
   // Стили для нижней навигации
@@ -297,5 +448,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flex: 1,
     paddingVertical: 4,
+    paddingBottom: 15
   },
 });
