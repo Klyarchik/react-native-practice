@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image, ScrollView, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CustomSwitch from '../components/CustomSwitch';
@@ -13,33 +13,283 @@ import ProjectIcon from '../../assets/Image/project.svg';
 import ProjectActiveIcon from '../../assets/Image/projectActive.svg';
 import ProfileIcon from '../../assets/Image/profile.svg';
 import ProfileActiveIcon from '../../assets/Image/profileActive.svg';
+import Banner1 from '../../assets/Image/banner1.svg'
+import Banner2 from '../../assets/Image/banner2.svg'
 
 // ============ МАЛЕНЬКИЕ КОМПОНЕНТЫ ДЛЯ КАЖДОЙ ВКЛАДКИ ============
 
 // Компонент для главной страницы
-const HomeContent = ({ userName, userEmail }) => (
-  <View style={styles.contentContainer}>
-    <View style={styles.headerSection}>
-      <Text style={styles.userName}>{userName}</Text>
-      <Text style={styles.userEmail}>{userEmail}</Text>
-    </View>
+const HomeContent = ({ textSearch, setTextSearch, isLoading }) => {
+  const insets = useSafeAreaInsets();
+  const [activeCategory, setActiveCategory] = useState('all'); // 'all', 'women', 'men'
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+
+  // Загружаем товары при монтировании
+  useEffect(() => {
+    loadProducts();
+  }, []);
+
+  const loadProducts = async () => {
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem("userToken");
+      
+      const response = await fetch(
+        "http://2.nntc.nnov.ru:8900/api/collections/products/records?page=1&perPage=30",
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          }
+        },
+      );
+
+      const data = await response.json();
+      
+      // Трансформируем данные из API в формат для карточек
+      const transformedProducts = data.items.map(item => ({
+        id: item.id,
+        title: item.title || 'Без названия',
+        category: item.typeCloses || 'Без категории',
+        price: item.price ? `${item.price} ₽` : '0 ₽',
+        description: item.description || 'Нет описания',
+        approximate_cost: item.approximate_cost || 'Не указан',
+        priceValue: item.price || 0
+      }));
+
+      setProducts(transformedProducts);
+    } catch (error) {
+      console.error('Ошибка загрузки товаров:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Фильтрация товаров по категории
+  const getFilteredProducts = () => {
+    if (activeCategory === 'all') {
+      return products;
+    }
     
-    <View style={styles.card}>
-      <Text style={styles.cardTitle}>Популярные проекты</Text>
-      <Text style={styles.cardText}>Здесь будут отображаться популярные проекты</Text>
-    </View>
+    const categoryMap = {
+      'women': 'Женская одежда',
+      'men': 'Мужская одежда'
+    };
+    
+    const targetCategory = categoryMap[activeCategory];
+    return products.filter(product => product.category === targetCategory);
+  };
 
-    <View style={styles.card}>
-      <Text style={styles.cardTitle}>Рекомендации</Text>
-      <Text style={styles.cardText}>Персонализированные рекомендации для вас</Text>
-    </View>
+  const handleAddPress = (product) => {
+    setSelectedProduct(product);
+    setModalVisible(true);
+  };
 
-    <View style={styles.card}>
-      <Text style={styles.cardTitle}>Новинки</Text>
-      <Text style={styles.cardText}>Свежие проекты и обновления</Text>
-    </View>
-  </View>
-);
+  const renderCard = ({ id, title, category, price }) => (
+    <TouchableOpacity 
+      key={id} 
+      style={styles.card} 
+      activeOpacity={1}
+    >
+      <View style={styles.cardContent}>
+        <Text style={styles.cardTitle}>{title}</Text>
+
+        <View style={styles.cardRow}>
+          <View style={styles.cardColumn}>
+            <Text style={styles.cardCategory}>
+              {category === 'Женская одежда' ? 'Женщинам' : 
+               category === 'Мужская одежда' ? 'Мужчинам' : category}
+            </Text>
+            <Text style={styles.cardPrice}>{price}</Text>
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.addButton}
+            onPress={() => handleAddPress({ id, title, category, price })}
+          >
+            <Text style={styles.addButtonText}>Добавить</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.centerContent}>
+        <Text>Загрузка...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <>
+      <ScrollView 
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollViewContent}
+      >
+        <View style={styles.contentContainer}>
+          {/* Поле поиска */}
+          <View style={styles.headerSection}>
+            <View style={styles.searchContainer}>
+              <Image 
+                source={require('../../assets/Image/search.png')} 
+                style={styles.searchIcon}
+              />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Искать описания"
+                value={textSearch}
+                onChangeText={setTextSearch}
+                placeholderTextColor="#9ca3af"
+              />
+            </View>
+          </View>
+
+          {/* Блок Акции и новости */}
+          <View style={styles.promotionsSection}>
+            <Text style={styles.sectionTitle}>Акции и новости</Text>
+            <ScrollView 
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalScrollContent}
+            >
+              <TouchableOpacity activeOpacity={0.9} style={styles.bannerWrapper}>
+                <Banner1 width="100%" height="100%" />
+              </TouchableOpacity>
+              <TouchableOpacity activeOpacity={0.9} style={styles.bannerWrapper}>
+                <Banner2 width="100%" height="100%" />
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+
+          {/* Блок Каталог описаний */}
+          <View style={styles.catalogSection}>
+            <Text style={styles.sectionTitle}>Каталог описаний</Text>
+            
+            {/* Кнопки категорий */}
+            <View style={styles.categoryButtons}>
+              <TouchableOpacity 
+                style={[
+                  styles.categoryButton,
+                  activeCategory === 'all' && styles.categoryButtonActive
+                ]}
+                onPress={() => setActiveCategory('all')}
+              >
+                <Text style={[
+                  styles.categoryButtonText,
+                  activeCategory === 'all' && styles.categoryButtonTextActive
+                ]}>Все</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[
+                  styles.categoryButton,
+                  activeCategory === 'women' && styles.categoryButtonActive
+                ]}
+                onPress={() => setActiveCategory('women')}
+              >
+                <Text style={[
+                  styles.categoryButtonText,
+                  activeCategory === 'women' && styles.categoryButtonTextActive
+                ]}>Женщинам</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[
+                  styles.categoryButton,
+                  activeCategory === 'men' && styles.categoryButtonActive
+                ]}
+                onPress={() => setActiveCategory('men')}
+              >
+                <Text style={[
+                  styles.categoryButtonText,
+                  activeCategory === 'men' && styles.categoryButtonTextActive
+                ]}>Мужчинам</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Карточки */}
+            <View style={styles.cardsGrid}>
+              {getFilteredProducts().map(renderCard)}
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Модальное окно с информацией о товаре */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          {/* Прозрачный фон для закрытия */}
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setModalVisible(false)}
+          />
+          
+          {/* Контент модального окна с учетом безопасной зоны */}
+          <View 
+            style={[
+              styles.modalContent,
+              {
+                paddingBottom: Math.max(insets.bottom, 20), // 👈 Учитываем безопасную зону снизу
+              }
+            ]}
+            onStartShouldSetResponder={() => true}
+            onTouchEnd={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{selectedProduct?.title}</Text>
+              <TouchableOpacity 
+                style={styles.closeButtonContainer}
+                onPress={() => setModalVisible(false)}
+              >
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView 
+              style={styles.modalBody}
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.modalLabel}>Описание</Text>
+              <Text style={styles.modalText}>
+                {products.find(p => p.id === selectedProduct?.id)?.description || 'Нет описания'}
+              </Text>
+
+              <Text style={styles.modalLabelApproximate}>Примерный расход:</Text>
+              <Text style={styles.modalTextApproximate}>
+                {products.find(p => p.id === selectedProduct?.id)?.approximate_cost || 'Не указан'}
+              </Text>
+            </ScrollView>
+
+            <TouchableOpacity 
+              style={styles.modalButton}
+              onPress={() => {
+                // Здесь логика добавления в корзину
+                setModalVisible(false);
+              }}
+            >
+              <Text style={styles.modalButtonText}>
+                Добавить за {selectedProduct?.price}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+};
 
 // Компонент для каталога
 const CatalogContent = () => (
@@ -117,6 +367,7 @@ export default function HomeScreen({ navigation }) {
   const [userName, setUserName] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [textSearch, setTextSearch] = useState("")
   const [activeTab, setActiveTab] = useState('home');
 
   // Загружаем данные при монтировании компонента
@@ -222,9 +473,17 @@ export default function HomeScreen({ navigation }) {
   const renderActiveContent = () => {
     switch (activeTab) {
       case 'home':
-        return <HomeContent userName={userName} userEmail={userEmail} />;
+        return <HomeContent 
+          textSearch={textSearch}
+          setTextSearch={setTextSearch}
+          isLoading={false} // или передайте реальное состояние isLoading если есть
+        />;
       case 'catalog':
-        return <CatalogContent />;
+        return <CatalogContent
+          textSearch={textSearch}
+          setTextSearch={setTextSearch}
+          isLoading={false}
+        />;
       case 'project':
         return <ProjectContent />;
       case 'profile':
@@ -241,24 +500,29 @@ export default function HomeScreen({ navigation }) {
   };
 
   return (
-    <View
-      style={[
-        styles.container,
-        {
-          paddingTop: insets.top,
-          paddingBottom: 0,
-          paddingLeft: insets.left,
-          paddingRight: insets.right,
-        },
-      ]}
-    >
-      {/* Основной контент */}
-      <View style={styles.mainContent}>
+    <View style={styles.container}>
+      {/* Основной контент с учетом безопасной зоны */}
+      <View 
+        style={[
+          styles.mainContent,
+          {
+            paddingTop: insets.top,
+            paddingBottom: 0,
+            paddingLeft: insets.left,
+            paddingRight: insets.right,
+          }
+        ]}
+      >
         {renderActiveContent()}
       </View>
 
-      {/* Нижняя навигация */}
-      <View style={[styles.bottomNavigation, { paddingBottom: insets.bottom }]}>
+      {/* Нижняя навигация с учетом безопасной зоны снизу */}
+      <View 
+        style={[
+          styles.bottomNavigation,
+          { paddingBottom: Math.max(insets.bottom, 12) }
+        ]}
+      >
         <TouchableOpacity 
           style={styles.tabItem}
           onPress={() => setActiveTab('home')}
@@ -296,6 +560,38 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
+  userName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#000000',
+    marginBottom: 4,
+  },
+  userEmail: {
+    fontSize: 16,
+    color: '#939396',
+    marginBottom: 24,
+  },
+  // Стили для баннеров
+  promotionsSection: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#939396',
+    marginBottom: 16,
+  },
+  horizontalScrollContent: {
+    paddingRight: 24,
+    gap: 10,
+  },
+  bannerWrapper: {
+    width: 300,
+    height: 152,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+  },
   mainContent: {
     flex: 1,
   },
@@ -311,18 +607,120 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   headerSection: {
+    marginTop: 12,
     marginBottom: 24,
   },
-  userName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#000000',
-    marginBottom: 4,
+  scrollView: {
+    flex: 1,
   },
-  userEmail: {
+  scrollViewContent: {
+    paddingBottom: 20,
+  },
+  catalogSection: {
+    flex: 1,
+  },
+  categoryButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  categoryButton: {
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    backgroundColor: '#F5F5F9',
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  categoryButtonActive: {
+    backgroundColor: '#1A6FEE',
+  },
+  categoryButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#7E7E9A',
+  },
+  categoryButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  cardsGrid: {
+    gap: 12,
+    paddingBottom: 20,
+  },
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#F4F4F4',
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  cardContent: {
+    gap: 12,
+  },
+  cardTitle: {
     fontSize: 16,
+    fontWeight: '600',
+    color: '#000000',
+    marginBottom: 8,
+  },
+  cardRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  cardColumn: {
+    flexDirection: 'column',
+    gap: 5,
+  },
+  cardCategory: {
+    fontSize: 14,
+    fontWeight: '600',
     color: '#939396',
-    marginBottom: 24,
+  },
+  cardPrice: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  addButton: {
+    backgroundColor: '#2074F2',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    alignSelf: 'center',
+  },
+  addButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: "#EBEBEB",
+    borderRadius: 12,
+    backgroundColor: "#F5F5F9",
+    paddingHorizontal: 12,
+    marginBottom: 16,
+  },
+  searchIcon: {
+    width: 25,
+    height: 25,
+    marginRight: 8,
+    tintColor: '#7E7E9A',
+    resizeMode: 'contain',
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: '#1f2937',
   },
   title: {
     fontSize: 28,
@@ -339,55 +737,30 @@ const styles = StyleSheet.create({
     fontSize: 64,
     marginBottom: 16,
   },
-  card: {
-    backgroundColor: '#F5F5F9',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 8,
-  },
-  cardText: {
-    fontSize: 14,
-    color: '#939396',
-    lineHeight: 20,
-  },
   ordersButton: {
     backgroundColor: '#fff',
     borderRadius: 12,
     marginBottom: 10,
     alignItems: 'center',
-    flexDirection: 'row', // Добавлено для расположения иконки и текста в ряд
+    flexDirection: 'row',
   },
   ordersButtonIcon: {
     width: 32,
     height: 32,
-    marginRight: 20, // Отступ между иконкой и текстом
+    marginRight: 20,
     resizeMode: 'contain',
   },
   ordersButtonText: {
     fontSize: 17,
     fontWeight: '600',
     color: '#000000',
-    
   },
-  // Добавьте этот стиль в объект styles
   notificationsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 16,
     marginBottom: 24
-    // ПОЛОСЫ УБРАНЫ! Только отступы
   },
   notificationsLeftContainer: {
     flexDirection: 'row',
@@ -406,10 +779,10 @@ const styles = StyleSheet.create({
   },
   bottomBlock: {
     alignItems: 'center',
-    marginTop: 122, // Отступ сверху от предыдущего контента
+    marginTop: 122,
   },
   legalLink: {
-    marginTop: 24, // Междустрочный интервал 24px
+    marginTop: 24,
   },
   legalText: {
     fontSize: 15,
@@ -432,7 +805,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontSize: 17,
   },
-  // Стили для нижней навигации
   bottomNavigation: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -440,7 +812,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#F0F0F0',
-    paddingTop: 12,
+    paddingTop: 8,
     paddingBottom: 12,
   },
   tabItem: {
@@ -449,5 +821,89 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 4,
     paddingBottom: 15
+  },
+  // Обновленные стили для модального окна
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "white",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "80%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    paddingBottom: 0,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#000000",
+    flex: 1,
+    marginRight: 10,
+  },
+  closeButtonContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 18,
+    backgroundColor: "#F5F5F9",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  closeButton: {
+    fontSize: 12,
+    color: "#6b7280",
+    lineHeight: 12,
+  },
+  modalBody: {
+    padding: 20,
+  },
+  modalLabel: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#939396",
+    marginBottom: 4,
+  },
+  modalLabelApproximate: {
+    fontSize: 14,
+    fontWeight: "400",
+    color: "#939396",
+    marginBottom: 4,
+  },
+  modalText: {
+    fontSize: 15,
+    fontWeight: '400',
+    color: "#000000",
+    lineHeight: 20,
+    marginBottom: 36,
+  },
+  modalTextApproximate: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: "#000000",
+    lineHeight: 20,
+    marginBottom: -8,
+  },
+  modalButton: {
+    backgroundColor: "#1A6FEE",
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 20,
+    minHeight: 56,
+    justifyContent: "center",
+  },
+  modalButtonText: {
+    color: "#FFFFFF",
+    textAlign: "center",
+    fontWeight: "600",
+    fontSize: 17,
   },
 });

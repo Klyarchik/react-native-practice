@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Modal,
   FlatList,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -129,204 +130,221 @@ export default function RegisterScreen({ navigation }) {
   };
 
   return (
-    <View
-      style={[
-        styles.container,
-        {
-          paddingTop: insets.top,
-          paddingBottom: insets.bottom,
-          paddingLeft: insets.left,
-          paddingRight: insets.right,
-        },
-      ]}
-    >
+    <View style={styles.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
       >
-        <View style={styles.contentContainer}>
-          <View style={styles.textWithLogo}>
-            <Text style={styles.title}>Создание профиля</Text>
-            <Text style={styles.description}>
-              Без профиля вы не сможете создавать проекты.
-            </Text>
-            <Text style={styles.description}>
-              В профиле будут храниться результаты проектов и ваши описания.
-            </Text>
-          </View>
-
-          <View style={styles.inputContainer}>
-            {/* Имя */}
-            <TextInput
-              style={styles.input}
-              placeholder="Имя"
-              value={firstName}
-              onChangeText={setFirstName}
-              autoCapitalize="words"
-              placeholderTextColor="#9ca3af"
-              editable={!isLoading}
-            />
-
-            {/* Отчество */}
-            <TextInput
-              style={styles.input}
-              placeholder="Отчество"
-              value={middleName}
-              onChangeText={setMiddleName}
-              autoCapitalize="words"
-              placeholderTextColor="#9ca3af"
-              editable={!isLoading}
-            />
-
-            {/* Фамилия */}
-            <TextInput
-              style={styles.input}
-              placeholder="Фамилия"
-              value={lastName}
-              onChangeText={setLastName}
-              autoCapitalize="words"
-              placeholderTextColor="#9ca3af"
-              editable={!isLoading}
-            />
-
-            {/* Дата рождения */}
-            <TouchableOpacity
-              style={styles.input}
-              onPress={showDatePicker}
-              disabled={isLoading}
-            >
-              <Text
-                style={[
-                  styles.inputText,
-                  !birthDate && styles.placeholderText,
-                ]}
-              >
-                {birthDate || "Дата рождения"}
+        <ScrollView 
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.scrollViewContent,
+            {
+              paddingTop: insets.top + 24,
+              paddingBottom: insets.bottom + 24,
+              paddingLeft: insets.left + 24,
+              paddingRight: insets.right + 24,
+            }
+          ]}
+        >
+          <View style={styles.contentContainer}>
+            <View style={styles.textWithLogo}>
+              <Text style={styles.title}>Создание профиля</Text>
+              <Text style={styles.description}>
+                Без профиля вы не сможете создавать проекты.
               </Text>
-            </TouchableOpacity>
-
-            {/* Модальный DatePicker */}
-            <DateTimePicker
-              isVisible={isDatePickerVisible}
-              mode="date"
-              onConfirm={handleConfirm}
-              onCancel={hideDatePicker}
-              maximumDate={new Date()}
-              confirmTextIOS="Выбрать"
-              cancelTextIOS="Отмена"
-              headerTextIOS="Выберите дату рождения"
-            />
-
-            {/* Пол - кастомный дропдаун */}
-            <TouchableOpacity
-              style={styles.genderInput}
-              onPress={() => setGenderModalVisible(true)}
-              activeOpacity={1}
-              disabled={isLoading}
-            >
-              <Text
-                style={[
-                  styles.genderInputText,
-                  !gender && styles.genderPlaceholder,
-                ]}
-              >
-                {getGenderLabel(gender)}
+              <Text style={styles.description}>
+                В профиле будут храниться результаты проектов и ваши описания.
               </Text>
-              <Image
-                source={require("../../assets/Image/chevron-down.png")}
-                style={styles.dropdownIcon}
+            </View>
+
+            <View style={styles.inputContainer}>
+              {/* Имя */}
+              <TextInput
+                style={styles.input}
+                placeholder="Имя"
+                value={firstName}
+                onChangeText={setFirstName}
+                autoCapitalize="words"
+                placeholderTextColor="#9ca3af"
+                editable={!isLoading}
               />
-            </TouchableOpacity>
 
-            {/* Модальное окно для выбора пола */}
-            <Modal
-              animationType="fade"
-              transparent={true}
-              visible={genderModalVisible}
-              onRequestClose={() => setGenderModalVisible(false)}
-            >
+              {/* Отчество */}
+              <TextInput
+                style={styles.input}
+                placeholder="Отчество"
+                value={middleName}
+                onChangeText={setMiddleName}
+                autoCapitalize="words"
+                placeholderTextColor="#9ca3af"
+                editable={!isLoading}
+              />
+
+              {/* Фамилия */}
+              <TextInput
+                style={styles.input}
+                placeholder="Фамилия"
+                value={lastName}
+                onChangeText={setLastName}
+                autoCapitalize="words"
+                placeholderTextColor="#9ca3af"
+                editable={!isLoading}
+              />
+
+              {/* Дата рождения */}
               <TouchableOpacity
-                style={styles.modalOverlay}
+                style={styles.input}
+                onPress={showDatePicker}
+                disabled={isLoading}
+              >
+                <Text
+                  style={[
+                    styles.inputText,
+                    !birthDate && styles.placeholderText,
+                  ]}
+                >
+                  {birthDate || "Дата рождения"}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Модальный DatePicker */}
+              <DateTimePicker
+                isVisible={isDatePickerVisible}
+                mode="date"
+                onConfirm={handleConfirm}
+                onCancel={hideDatePicker}
+                maximumDate={new Date()}
+                confirmTextIOS="Выбрать"
+                cancelTextIOS="Отмена"
+                headerTextIOS="Выберите дату рождения"
+              />
+
+              {/* Пол - кастомный дропдаун */}
+              <TouchableOpacity
+                style={styles.genderInput}
+                onPress={() => setGenderModalVisible(true)}
                 activeOpacity={1}
+                disabled={isLoading}
+              >
+                <Text
+                  style={[
+                    styles.genderInputText,
+                    !gender && styles.genderPlaceholder,
+                  ]}
+                >
+                  {getGenderLabel(gender)}
+                </Text>
+                <Image
+                  source={require("../../assets/Image/chevron-down.png")}
+                  style={styles.dropdownIcon}
+                />
+              </TouchableOpacity>
+
+              {/* Email */}
+              <TextInput
+                style={styles.input}
+                placeholder="Почта"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholderTextColor="#9ca3af"
+                editable={!isLoading}
+              />
+
+              <TouchableOpacity
+                style={[styles.registerButton, { backgroundColor: buttonColor }]}
+                onPress={handleRegister}
+                disabled={!isFormValid || isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.registerButtonText}>Далее</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.loginLink}
+                onPress={() => navigation.navigate("Login")}
+                disabled={isLoading}
+              >
+                <Text style={styles.loginLinkText}>Уже есть аккаунт? Войти</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Модальное окно для выбора пола */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={genderModalVisible}
+        onRequestClose={() => setGenderModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          {/* Прозрачный фон для закрытия */}
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setGenderModalVisible(false)}
+          />
+          
+          {/* Контент модального окна с учетом безопасной зоны */}
+          <View 
+            style={[
+              styles.modalContent,
+              {
+                paddingBottom: Math.max(insets.bottom, 20),
+              }
+            ]}
+            onStartShouldSetResponder={() => true}
+            onTouchEnd={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Пол</Text>
+              <TouchableOpacity
                 onPress={() => setGenderModalVisible(false)}
               >
-                <View style={styles.modalContent}>
-                  <View style={styles.modalHeader}>
-                    <Text style={styles.modalTitle}>Пол</Text>
-                    <TouchableOpacity
-                      onPress={() => setGenderModalVisible(false)}
-                    >
-                      <Text style={styles.closeButton}>✕</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <FlatList
-                    data={genderOptions}
-                    keyExtractor={(item) => item.value}
-                    renderItem={({ item }) => (
-                      <TouchableOpacity
-                        style={[
-                          styles.optionItem,
-                          gender === item.value && styles.optionItemActive,
-                        ]}
-                        onPress={() => {
-                          setGender(item.value);
-                          setGenderModalVisible(false);
-                        }}
-                      >
-                        <Text
-                          style={[
-                            styles.optionText,
-                            gender === item.value && styles.optionTextActive,
-                          ]}
-                        >
-                          {item.label}
-                        </Text>
-                        {gender === item.value && (
-                          <Text style={styles.checkmark}>✓</Text>
-                        )}
-                      </TouchableOpacity>
-                    )}
-                  />
-                </View>
+                <Text style={styles.closeButton}>✕</Text>
               </TouchableOpacity>
-            </Modal>
+            </View>
 
-            {/* Email */}
-            <TextInput
-              style={styles.input}
-              placeholder="Почта"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholderTextColor="#9ca3af"
-              editable={!isLoading}
-            />
-
-            <TouchableOpacity
-              style={[styles.registerButton, { backgroundColor: buttonColor }]}
-              onPress={handleRegister}
-              disabled={!isFormValid || isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.registerButtonText}>Далее</Text>
+            <FlatList
+              data={genderOptions}
+              keyExtractor={(item) => item.value}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.optionItem,
+                    gender === item.value && styles.optionItemActive,
+                  ]}
+                  onPress={() => {
+                    setGender(item.value);
+                    setGenderModalVisible(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.optionText,
+                      gender === item.value && styles.optionTextActive,
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                  {gender === item.value && (
+                    <Text style={styles.checkmark}>✓</Text>
+                  )}
+                </TouchableOpacity>
               )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.loginLink}
-              onPress={() => navigation.navigate("Login")}
-              disabled={isLoading}
-            >
-              <Text style={styles.loginLinkText}>Уже есть аккаунт? Войти</Text>
-            </TouchableOpacity>
+            />
           </View>
         </View>
-      </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -339,10 +357,15 @@ const styles = StyleSheet.create({
   keyboardView: {
     flex: 1,
   },
+  scrollView: {
+    flex: 1,
+  },
+  scrollViewContent: {
+    flexGrow: 1,
+  },
   contentContainer: {
     flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: 24,
+    marginTop: 24
   },
   textWithLogo: {
     marginBottom: 24,
@@ -403,6 +426,29 @@ const styles = StyleSheet.create({
     height: 20,
     tintColor: "#6b7280",
   },
+  // Стили для кнопки регистрации
+  registerButton: {
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    minHeight: 56,
+    justifyContent: "center",
+  },
+  registerButtonText: {
+    color: "#fff",
+    textAlign: "center",
+    fontWeight: "bold",
+    fontSize: 17,
+  },
+  loginLink: {
+    marginTop: 12,
+    marginBottom: 20,
+  },
+  loginLinkText: {
+    color: "#2074F2",
+    textAlign: "center",
+    fontSize: 15,
+  },
   // Стили для модального окна выбора пола
   modalOverlay: {
     flex: 1,
@@ -413,7 +459,6 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingBottom: 20,
     maxHeight: "50%",
   },
   modalHeader: {
@@ -457,28 +502,5 @@ const styles = StyleSheet.create({
     color: "#1A6FEE",
     fontSize: 18,
     fontWeight: "bold",
-  },
-  // Стили для кнопки регистрации
-  registerButton: {
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 16,
-    minHeight: 56,
-    justifyContent: "center",
-  },
-  registerButtonText: {
-    color: "#fff",
-    textAlign: "center",
-    fontWeight: "bold",
-    fontSize: 17,
-  },
-  loginLink: {
-    marginTop: 12,
-    marginBottom: 20,
-  },
-  loginLinkText: {
-    color: "#2074F2",
-    textAlign: "center",
-    fontSize: 15,
   },
 });
