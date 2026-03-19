@@ -291,14 +291,273 @@ const HomeContent = ({ textSearch, setTextSearch, isLoading }) => {
   );
 };
 
+
+
 // Компонент для каталога
-const CatalogContent = () => (
-  <View style={styles.centerContent}>
-    <Text style={styles.bigEmoji}>📋</Text>
-    <Text style={styles.title}>Каталог</Text>
-    <Text style={styles.subtitle}>Здесь будет каталог проектов</Text>
-  </View>
-);
+const CatalogContent = ({ textSearch, setTextSearch, isLoading, setActiveTab  }) => {
+  const insets = useSafeAreaInsets(); // 👈 Добавляем insets
+  const [activeCategory, setActiveCategory] = useState('all');
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modalVisible, setModalVisible] = useState(false); // 👈 Добавляем состояние для модалки
+  const [selectedProduct, setSelectedProduct] = useState(null); // 👈 Добавляем состояние для выбранного товара
+
+  // Загружаем товары при монтировании
+  useEffect(() => {
+    loadProducts();
+  }, []);
+
+  const loadProducts = async () => {
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem("userToken");
+      
+      const response = await fetch(
+        "http://2.nntc.nnov.ru:8900/api/collections/products/records?page=1&perPage=30",
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          }
+        },
+      );
+
+      const data = await response.json();
+      
+      // Трансформируем данные из API в формат для карточек
+      const transformedProducts = data.items.map(item => ({
+        id: item.id,
+        title: item.title || 'Без названия',
+        category: item.typeCloses || 'Без категории',
+        price: item.price ? `${item.price} ₽` : '0 ₽',
+        description: item.description || 'Нет описания',
+        approximate_cost: item.approximate_cost || 'Не указан',
+        priceValue: item.price || 0
+      }));
+
+      setProducts(transformedProducts);
+    } catch (error) {
+      console.error('Ошибка загрузки товаров:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Фильтрация товаров по категории
+  const getFilteredProducts = () => {
+    if (activeCategory === 'all') {
+      return products;
+    }
+    
+    const categoryMap = {
+      'women': 'Женская одежда',
+      'men': 'Мужская одежда'
+    };
+    
+    const targetCategory = categoryMap[activeCategory];
+    return products.filter(product => product.category === targetCategory);
+  };
+
+  // 👈 Добавляем функцию для открытия модального окна
+  const handleAddPress = (product) => {
+    setSelectedProduct(product);
+    setModalVisible(true);
+  };
+
+  const renderCard = ({ id, title, category, price }) => (
+    <TouchableOpacity 
+      key={id} 
+      style={styles.card} 
+      activeOpacity={1}
+    >
+      <View style={styles.cardContent}>
+        <Text style={styles.cardTitle}>{title}</Text>
+
+        <View style={styles.cardRow}>
+          <View style={styles.cardColumn}>
+            <Text style={styles.cardCategory}>
+              {category === 'Женская одежда' ? 'Женщинам' : 
+               category === 'Мужская одежда' ? 'Мужчинам' : category}
+            </Text>
+            <Text style={styles.cardPrice}>{price}</Text>
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.addButton}
+            onPress={() => handleAddPress({ id, title, category, price })} // 👈 Добавляем onPress
+          >
+            <Text style={styles.addButtonText}>Добавить</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.centerContent}>
+        <Text>Загрузка...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <>
+      <ScrollView 
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollViewContent}
+      >
+        <View style={styles.contentContainer}>
+          {/* Поле поиска с иконкой профиля */}
+          <View style={styles.headerSection}>
+            <View style={styles.searchRow}>
+              <View style={styles.searchContainer}>
+                <Image 
+                  source={require('../../assets/Image/search.png')} 
+                  style={styles.searchIcon}
+                />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Искать описания"
+                  value={textSearch}
+                  onChangeText={setTextSearch}
+                  placeholderTextColor="#9ca3af"
+                />
+              </View>
+              <TouchableOpacity 
+                style={styles.profileIconContainer}
+                onPress={() => setActiveTab('profile')}
+              >
+                <Image 
+                  source={require('../../assets/Image/mainProfile.png')} 
+                  style={styles.profileIcon}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Блок Каталог описаний */}
+          <View style={styles.catalogSection}>
+            {/* Кнопки категорий */}
+            <View style={styles.categoryButtons}>
+              <TouchableOpacity 
+                style={[
+                  styles.categoryButton,
+                  activeCategory === 'all' && styles.categoryButtonActive
+                ]}
+                onPress={() => setActiveCategory('all')}
+              >
+                <Text style={[
+                  styles.categoryButtonText,
+                  activeCategory === 'all' && styles.categoryButtonTextActive
+                ]}>Все</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[
+                  styles.categoryButton,
+                  activeCategory === 'women' && styles.categoryButtonActive
+                ]}
+                onPress={() => setActiveCategory('women')}
+              >
+                <Text style={[
+                  styles.categoryButtonText,
+                  activeCategory === 'women' && styles.categoryButtonTextActive
+                ]}>Женщинам</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[
+                  styles.categoryButton,
+                  activeCategory === 'men' && styles.categoryButtonActive
+                ]}
+                onPress={() => setActiveCategory('men')}
+              >
+                <Text style={[
+                  styles.categoryButtonText,
+                  activeCategory === 'men' && styles.categoryButtonTextActive
+                ]}>Мужчинам</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Карточки */}
+            <View style={styles.cardsGrid}>
+              {getFilteredProducts().map(renderCard)}
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Модальное окно с информацией о товаре - копируем из HomeContent */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          {/* Прозрачный фон для закрытия */}
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setModalVisible(false)}
+          />
+          
+          {/* Контент модального окна с учетом безопасной зоны */}
+          <View 
+            style={[
+              styles.modalContent,
+              {
+                paddingBottom: Math.max(insets.bottom, 20),
+              }
+            ]}
+            onStartShouldSetResponder={() => true}
+            onTouchEnd={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{selectedProduct?.title}</Text>
+              <TouchableOpacity 
+                style={styles.closeButtonContainer}
+                onPress={() => setModalVisible(false)}
+              >
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView 
+              style={styles.modalBody}
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.modalLabel}>Описание</Text>
+              <Text style={styles.modalText}>
+                {products.find(p => p.id === selectedProduct?.id)?.description || 'Нет описания'}
+              </Text>
+
+              <Text style={styles.modalLabelApproximate}>Примерный расход:</Text>
+              <Text style={styles.modalTextApproximate}>
+                {products.find(p => p.id === selectedProduct?.id)?.approximate_cost || 'Не указан'}
+              </Text>
+            </ScrollView>
+
+            <TouchableOpacity 
+              style={styles.modalButton}
+              onPress={() => {
+                // Здесь логика добавления в корзину
+                setModalVisible(false);
+              }}
+            >
+              <Text style={styles.modalButtonText}>
+                Добавить за {selectedProduct?.price}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+};
 
 // Компонент для проектов
 const ProjectContent = () => (
@@ -370,7 +629,7 @@ export default function HomeScreen({ navigation }) {
   const [textSearch, setTextSearch] = useState("")
   const [activeTab, setActiveTab] = useState('home');
 
-  // Загружаем данные при монтировании компонента
+  // Загружаем данные при монтировании компоненaта
   useEffect(() => {
     loadUserData();
     loadNotificationSetting(); // 👈 Загружаем настройку уведомлений
@@ -483,6 +742,7 @@ export default function HomeScreen({ navigation }) {
           textSearch={textSearch}
           setTextSearch={setTextSearch}
           isLoading={false}
+          setActiveTab={setActiveTab}
         />;
       case 'project':
         return <ProjectContent />;
@@ -608,7 +868,7 @@ const styles = StyleSheet.create({
   },
   headerSection: {
     marginTop: 12,
-    marginBottom: 24,
+    marginBottom: 8,
   },
   scrollView: {
     flex: 1,
@@ -700,6 +960,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   searchContainer: {
+    flex: 1, // Это гарантирует, что поиск займет все доступное пространство слева от иконки
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
@@ -707,7 +968,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: "#F5F5F9",
     paddingHorizontal: 12,
-    marginBottom: 16,
+    marginBottom: 24,
   },
   searchIcon: {
     width: 25,
@@ -905,5 +1166,26 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontWeight: "600",
     fontSize: 17,
+  },
+  // Новые стили для строки поиска с иконкой профиля
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  profileIconContainer: {
+    marginTop: -24,
+    marginRight: -8,
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+  },
+  profileIcon: {
+    width: 48,
+    height: 48,
+    resizeMode: 'contain',
   },
 });
