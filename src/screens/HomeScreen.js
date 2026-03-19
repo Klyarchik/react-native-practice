@@ -15,17 +15,40 @@ import ProfileIcon from '../../assets/Image/profile.svg';
 import ProfileActiveIcon from '../../assets/Image/profileActive.svg';
 import Banner1 from '../../assets/Image/banner1.svg'
 import Banner2 from '../../assets/Image/banner2.svg'
+import CartIcon from '../../assets/Image/cart.svg';
+
+
+
+
+// ============ КОМПОНЕНТ КОРЗИНЫ ============
+const CartButton = ({ total, onPress }) => {
+  if (total === 0) return null;
+  
+  return (
+    <TouchableOpacity style={styles.cartButton} onPress={onPress}>
+      <View style={styles.cartButtonLeft}>
+        <CartIcon width={24} height={24} />
+        <Text style={styles.cartButtonText}>В корзину</Text>
+      </View>
+      <Text style={styles.cartButtonPrice}>{total} ₽</Text>
+    </TouchableOpacity>
+  );
+};
+
+
+
 
 // ============ МАЛЕНЬКИЕ КОМПОНЕНТЫ ДЛЯ КАЖДОЙ ВКЛАДКИ ============
 
-// Компонент для главной страницы
+// Обновленный компонент для главной страницы
 const HomeContent = ({ textSearch, setTextSearch, isLoading }) => {
   const insets = useSafeAreaInsets();
-  const [activeCategory, setActiveCategory] = useState('all'); // 'all', 'women', 'men'
+  const [activeCategory, setActiveCategory] = useState('all');
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [cartItems, setCartItems] = useState([]); // Состояние для корзины
 
   // Загружаем товары при монтировании
   useEffect(() => {
@@ -50,15 +73,14 @@ const HomeContent = ({ textSearch, setTextSearch, isLoading }) => {
 
       const data = await response.json();
       
-      // Трансформируем данные из API в формат для карточек
       const transformedProducts = data.items.map(item => ({
         id: item.id,
         title: item.title || 'Без названия',
         category: item.typeCloses || 'Без категории',
         price: item.price ? `${item.price} ₽` : '0 ₽',
+        priceValue: item.price || 0,
         description: item.description || 'Нет описания',
         approximate_cost: item.approximate_cost || 'Не указан',
-        priceValue: item.price || 0
       }));
 
       setProducts(transformedProducts);
@@ -84,39 +106,82 @@ const HomeContent = ({ textSearch, setTextSearch, isLoading }) => {
     return products.filter(product => product.category === targetCategory);
   };
 
+  // Проверка, есть ли товар в корзине
+  const isInCart = (productId) => {
+    return cartItems.some(item => item.id === productId);
+  };
+
+  // Добавление товара в корзину
+  const addToCart = (product) => {
+    setCartItems(prev => [...prev, { 
+      id: product.id, 
+      title: product.title, 
+      price: product.priceValue 
+    }]);
+  };
+
+  // Удаление товара из корзины
+  const removeFromCart = (productId) => {
+    setCartItems(prev => prev.filter(item => item.id !== productId));
+  };
+
+  // Подсчет общей суммы
+  const getTotalPrice = () => {
+    return cartItems.reduce((sum, item) => sum + item.price, 0);
+  };
+
   const handleAddPress = (product) => {
     setSelectedProduct(product);
     setModalVisible(true);
   };
 
-  const renderCard = ({ id, title, category, price }) => (
-    <TouchableOpacity 
-      key={id} 
-      style={styles.card} 
-      activeOpacity={1}
-    >
-      <View style={styles.cardContent}>
-        <Text style={styles.cardTitle}>{title}</Text>
+  const handleModalAddToCart = () => {
+    if (selectedProduct) {
+      addToCart(selectedProduct);
+      setModalVisible(false);
+    }
+  };
 
-        <View style={styles.cardRow}>
-          <View style={styles.cardColumn}>
-            <Text style={styles.cardCategory}>
-              {category === 'Женская одежда' ? 'Женщинам' : 
-               category === 'Мужская одежда' ? 'Мужчинам' : category}
-            </Text>
-            <Text style={styles.cardPrice}>{price}</Text>
+  const renderCard = ({ id, title, category, price }) => {
+    const inCart = isInCart(id);
+    
+    return (
+      <TouchableOpacity 
+        key={id} 
+        style={styles.card} 
+        activeOpacity={1}
+      >
+        <View style={styles.cardContent}>
+          <Text style={styles.cardTitle}>{title}</Text>
+
+          <View style={styles.cardRow}>
+            <View style={styles.cardColumn}>
+              <Text style={styles.cardCategory}>
+                {category === 'Женская одежда' ? 'Женщинам' : 
+                category === 'Мужская одежда' ? 'Мужчинам' : category}
+              </Text>
+              <Text style={styles.cardPrice}>{price}</Text>
+            </View>
+            
+            <TouchableOpacity 
+              style={[styles.addButton, inCart && styles.removeButton]}
+              onPress={() => {
+                if (inCart) {
+                  removeFromCart(id);
+                } else {
+                  handleAddPress({ id, title, category, price, priceValue: parseInt(price) });
+                }
+              }}
+            >
+              <Text style={[styles.addButtonText, inCart && styles.removeButtonText]}>
+                {inCart ? 'Убрать' : 'Добавить'}
+              </Text>
+            </TouchableOpacity>
           </View>
-          
-          <TouchableOpacity 
-            style={styles.addButton}
-            onPress={() => handleAddPress({ id, title, category, price })}
-          >
-            <Text style={styles.addButtonText}>Добавить</Text>
-          </TouchableOpacity>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
@@ -222,6 +287,12 @@ const HomeContent = ({ textSearch, setTextSearch, isLoading }) => {
         </View>
       </ScrollView>
 
+      {/* Кнопка корзины */}
+      <CartButton total={getTotalPrice()} onPress={() => {
+        // Здесь будет переход в корзину
+        console.log('Переход в корзину', cartItems);
+      }} />
+
       {/* Модальное окно с информацией о товаре */}
       <Modal
         animationType="fade"
@@ -230,19 +301,17 @@ const HomeContent = ({ textSearch, setTextSearch, isLoading }) => {
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          {/* Прозрачный фон для закрытия */}
           <TouchableOpacity
             style={StyleSheet.absoluteFill}
             activeOpacity={1}
             onPress={() => setModalVisible(false)}
           />
           
-          {/* Контент модального окна с учетом безопасной зоны */}
           <View 
             style={[
               styles.modalContent,
               {
-                paddingBottom: Math.max(insets.bottom, 20), // 👈 Учитываем безопасную зону снизу
+                paddingBottom: Math.max(insets.bottom, 20),
               }
             ]}
             onStartShouldSetResponder={() => true}
@@ -275,10 +344,7 @@ const HomeContent = ({ textSearch, setTextSearch, isLoading }) => {
 
             <TouchableOpacity 
               style={styles.modalButton}
-              onPress={() => {
-                // Здесь логика добавления в корзину
-                setModalVisible(false);
-              }}
+              onPress={handleModalAddToCart}
             >
               <Text style={styles.modalButtonText}>
                 Добавить за {selectedProduct?.price}
@@ -295,12 +361,13 @@ const HomeContent = ({ textSearch, setTextSearch, isLoading }) => {
 
 // Компонент для каталога
 const CatalogContent = ({ textSearch, setTextSearch, isLoading, setActiveTab  }) => {
-  const insets = useSafeAreaInsets(); // 👈 Добавляем insets
+  const insets = useSafeAreaInsets();
   const [activeCategory, setActiveCategory] = useState('all');
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [modalVisible, setModalVisible] = useState(false); // 👈 Добавляем состояние для модалки
-  const [selectedProduct, setSelectedProduct] = useState(null); // 👈 Добавляем состояние для выбранного товара
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [cartItems, setCartItems] = useState([]); // 👈 Добавляем состояние корзины
 
   // Загружаем товары при монтировании
   useEffect(() => {
@@ -325,15 +392,14 @@ const CatalogContent = ({ textSearch, setTextSearch, isLoading, setActiveTab  })
 
       const data = await response.json();
       
-      // Трансформируем данные из API в формат для карточек
       const transformedProducts = data.items.map(item => ({
         id: item.id,
         title: item.title || 'Без названия',
         category: item.typeCloses || 'Без категории',
         price: item.price ? `${item.price} ₽` : '0 ₽',
+        priceValue: item.price || 0,
         description: item.description || 'Нет описания',
         approximate_cost: item.approximate_cost || 'Не указан',
-        priceValue: item.price || 0
       }));
 
       setProducts(transformedProducts);
@@ -359,40 +425,79 @@ const CatalogContent = ({ textSearch, setTextSearch, isLoading, setActiveTab  })
     return products.filter(product => product.category === targetCategory);
   };
 
-  // 👈 Добавляем функцию для открытия модального окна
+  // 👇 Функции для работы с корзиной
+  const isInCart = (productId) => {
+    return cartItems.some(item => item.id === productId);
+  };
+
+  const addToCart = (product) => {
+    setCartItems(prev => [...prev, { 
+      id: product.id, 
+      title: product.title, 
+      price: product.priceValue 
+    }]);
+  };
+
+  const removeFromCart = (productId) => {
+    setCartItems(prev => prev.filter(item => item.id !== productId));
+  };
+
+  const getTotalPrice = () => {
+    return cartItems.reduce((sum, item) => sum + item.price, 0);
+  };
+
   const handleAddPress = (product) => {
     setSelectedProduct(product);
     setModalVisible(true);
   };
 
-  const renderCard = ({ id, title, category, price }) => (
-    <TouchableOpacity 
-      key={id} 
-      style={styles.card} 
-      activeOpacity={1}
-    >
-      <View style={styles.cardContent}>
-        <Text style={styles.cardTitle}>{title}</Text>
+  const handleModalAddToCart = () => {
+    if (selectedProduct) {
+      addToCart(selectedProduct);
+      setModalVisible(false);
+    }
+  };
 
-        <View style={styles.cardRow}>
-          <View style={styles.cardColumn}>
-            <Text style={styles.cardCategory}>
-              {category === 'Женская одежда' ? 'Женщинам' : 
-               category === 'Мужская одежда' ? 'Мужчинам' : category}
-            </Text>
-            <Text style={styles.cardPrice}>{price}</Text>
+  const renderCard = ({ id, title, category, price }) => {
+    const inCart = isInCart(id);
+    
+    return (
+      <TouchableOpacity 
+        key={id} 
+        style={styles.card} 
+        activeOpacity={1}
+      >
+        <View style={styles.cardContent}>
+          <Text style={styles.cardTitle}>{title}</Text>
+
+          <View style={styles.cardRow}>
+            <View style={styles.cardColumn}>
+              <Text style={styles.cardCategory}>
+                {category === 'Женская одежда' ? 'Женщинам' : 
+                 category === 'Мужская одежда' ? 'Мужчинам' : category}
+              </Text>
+              <Text style={styles.cardPrice}>{price}</Text>
+            </View>
+            
+            <TouchableOpacity 
+              style={[styles.addButton, inCart && styles.removeButton]}
+              onPress={() => {
+                if (inCart) {
+                  removeFromCart(id);
+                } else {
+                  handleAddPress({ id, title, category, price, priceValue: parseInt(price) });
+                }
+              }}
+            >
+              <Text style={[styles.addButtonText, inCart && styles.removeButtonText]}>
+                {inCart ? 'Убрать' : 'Добавить'}
+              </Text>
+            </TouchableOpacity>
           </View>
-          
-          <TouchableOpacity 
-            style={styles.addButton}
-            onPress={() => handleAddPress({ id, title, category, price })} // 👈 Добавляем onPress
-          >
-            <Text style={styles.addButtonText}>Добавить</Text>
-          </TouchableOpacity>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
@@ -490,7 +595,12 @@ const CatalogContent = ({ textSearch, setTextSearch, isLoading, setActiveTab  })
         </View>
       </ScrollView>
 
-      {/* Модальное окно с информацией о товаре - копируем из HomeContent */}
+      {/* Кнопка корзины */}
+      <CartButton total={getTotalPrice()} onPress={() => {
+        console.log('Переход в корзину', cartItems);
+      }} />
+
+      {/* Модальное окно с информацией о товаре */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -498,14 +608,12 @@ const CatalogContent = ({ textSearch, setTextSearch, isLoading, setActiveTab  })
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          {/* Прозрачный фон для закрытия */}
           <TouchableOpacity
             style={StyleSheet.absoluteFill}
             activeOpacity={1}
             onPress={() => setModalVisible(false)}
           />
           
-          {/* Контент модального окна с учетом безопасной зоны */}
           <View 
             style={[
               styles.modalContent,
@@ -543,10 +651,7 @@ const CatalogContent = ({ textSearch, setTextSearch, isLoading, setActiveTab  })
 
             <TouchableOpacity 
               style={styles.modalButton}
-              onPress={() => {
-                // Здесь логика добавления в корзину
-                setModalVisible(false);
-              }}
+              onPress={handleModalAddToCart}
             >
               <Text style={styles.modalButtonText}>
                 Добавить за {selectedProduct?.price}
@@ -905,6 +1010,7 @@ const styles = StyleSheet.create({
   cardsGrid: {
     gap: 12,
     paddingBottom: 20,
+    marginBottom: 42
   },
   card: {
     borderRadius: 16,
@@ -949,8 +1055,12 @@ const styles = StyleSheet.create({
   },
   addButton: {
     backgroundColor: '#2074F2',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    // paddingVertical: 10,
+    // paddingHorizontal: 20,
+    width: 96,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 10,
     alignSelf: 'center',
   },
@@ -1187,5 +1297,48 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     resizeMode: 'contain',
+  },
+  // Стили для кнопки корзины
+  cartButton: {
+    position: 'absolute',
+    bottom: 20, // Высота над нижней навигацией
+    left: 24,
+    right: 24,
+    backgroundColor: '#1A6FEE',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cartButtonLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cartButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  cartButtonPrice: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  // Стиль для кнопки "Убрать"
+  removeButton: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#1A6FEE',
+  },
+  // Стиль для текста кнопки "Убрать"
+  removeButtonText: {
+    color: '#1A6FEE',
   },
 });
