@@ -13,11 +13,12 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Auth from '../../assets/Image/auth.svg'
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false); // Состояние для видимости пароля
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const insets = useSafeAreaInsets();
 
@@ -30,10 +31,9 @@ export default function LoginScreen({ navigation }) {
       return;
     }
 
-    setIsLoading(true); // Показываем индикатор загрузки
+    setIsLoading(true);
 
     try {
-      // Отправляем запрос на сервер
       const response = await fetch(
         "http://2.nntc.nnov.ru:8900/api/collections/users/auth-with-password",
         {
@@ -49,15 +49,11 @@ export default function LoginScreen({ navigation }) {
       );
 
       const data = await response.json();
-      let token
 
       if (response.ok) {
-        // Успешная авторизация
         console.log("Успешная регистрация:", data);
-        token = data.token
         await AsyncStorage.setItem("userToken", data.token);
-        await AsyncStorage.setItem("userId", data.record.id)
-
+        await AsyncStorage.setItem("userId", data.record.id);
         navigation.replace("CreatePassword");
       } else {
         Alert.alert("Ошибка", "Неверный email или пароль");
@@ -69,7 +65,7 @@ export default function LoginScreen({ navigation }) {
         "Не удалось подключиться к серверу. Проверьте интернет-соединение.",
       );
     } finally {
-      setIsLoading(false); // Скрываем индикатор загрузки
+      setIsLoading(false);
     }
   };
 
@@ -90,14 +86,14 @@ export default function LoginScreen({ navigation }) {
         style={styles.keyboardView}
       >
         <View style={styles.contentContainer}>
-          <View style={styles.textWithLogo}>
+          <View style={styles.headerRow}>
             <Image
               source={require("../../assets/Image/hello.png")}
               style={styles.logo}
             />
             <Text style={styles.title}>Добро пожаловать!</Text>
-            <Text>Войдите, чтобы воспользоваться функциями приложения</Text>
           </View>
+          <Text style={styles.subtitle}>Войдите, чтобы воспользоваться функциями приложения</Text>
 
           <View style={styles.inputContainer}>
             <View>
@@ -121,7 +117,7 @@ export default function LoginScreen({ navigation }) {
                   style={styles.passwordInput}
                   value={password}
                   onChangeText={setPassword}
-                  secureTextEntry={!showPassword} // Используем состояние для скрытия/показа
+                  secureTextEntry={!showPassword}
                   placeholderTextColor="#9ca3af"
                   editable={!isLoading}
                 />
@@ -148,7 +144,7 @@ export default function LoginScreen({ navigation }) {
               disabled={!isFormValid || isLoading}
             >
               {isLoading ? (
-                <ActivityIndicator color="#fff" /> // Показываем индикатор загрузки
+                <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.loginButtonText}>Далее</Text>
               )}
@@ -161,6 +157,8 @@ export default function LoginScreen({ navigation }) {
             >
               <Text style={styles.registerLinkText}>Зарегистрироваться</Text>
             </TouchableOpacity>
+
+            <Auth width={310} marginTop={15}/>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -181,8 +179,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 24,
   },
-  textWithLogo: {
-    display: "flex",
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 8,
   },
   logo: {
     height: 32,
@@ -191,13 +192,18 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: "bold",
-    marginBottom: 32,
     color: "#1f2937",
+  },
+  subtitle: {
+    fontSize: 14,
+    color: "#939396",
+    marginBottom: 32,
   },
   label: {
     fontSize: 14,
     color: "#7E7E9A",
     lineHeight: 20,
+    marginBottom: 4,
   },
   inputContainer: {
     gap: 16,
@@ -243,8 +249,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    minHeight: 56, // Фиксированная высота для кнопки
-    justifyContent: "center", // Центрируем содержимое
+    minHeight: 56,
+    justifyContent: "center",
   },
   loginButtonText: {
     color: "#fff",
@@ -253,7 +259,7 @@ const styles = StyleSheet.create({
     fontSize: 17,
   },
   registerLink: {
-    marginTop: 16,
+    marginTop: 0,
   },
   registerLinkText: {
     color: "#2074F2",

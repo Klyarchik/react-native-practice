@@ -11,6 +11,7 @@ import HomeScreen from '../screens/HomeScreen';
 import CreateBtnPasswordScreen from '../screens/CreateBtnPasswordScreen';
 import LoginPasswordScreen from '../screens/LoginPasswordScreen';
 import CreateTextPasswordScreen from '../screens/CreateTextPasswordScreen';
+import CartScreen from '../screens/CartScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -72,6 +73,7 @@ export default function AppNavigator() {
       <Stack.Screen name="CreatePassword" component={CreateBtnPasswordScreen} />
       <Stack.Screen name="LoginPassword" component={LoginPasswordScreen} />
       <Stack.Screen name="CreateTextPassword" component={CreateTextPasswordScreen} />
+      <Stack.Screen name="Cart" component={CartScreen} />
     </Stack.Navigator>
   );
 }

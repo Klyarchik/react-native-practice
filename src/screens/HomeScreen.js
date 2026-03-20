@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image, ScrollView, Modal } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image, ScrollView, Modal, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CustomSwitch from '../components/CustomSwitch';
+import DateTimePicker from "react-native-modal-datetime-picker";
+import * as ImagePicker from 'expo-image-picker';
 
-// Импортируем иконки (замените на PNG или используйте текстовые иконки)
+// Импортируем иконки
 import HomeIcon from '../../assets/Image/main.svg';
 import HomeActiveIcon from '../../assets/Image/mainActive.svg';
 import CatalogIcon from '../../assets/Image/catalog.svg';
@@ -13,12 +15,9 @@ import ProjectIcon from '../../assets/Image/project.svg';
 import ProjectActiveIcon from '../../assets/Image/projectActive.svg';
 import ProfileIcon from '../../assets/Image/profile.svg';
 import ProfileActiveIcon from '../../assets/Image/profileActive.svg';
-import Banner1 from '../../assets/Image/banner1.svg'
-import Banner2 from '../../assets/Image/banner2.svg'
 import CartIcon from '../../assets/Image/cart.svg';
-
-
-
+import PlusIcon from '../../assets/Image/plus.svg';
+import ArrowLeftIcon from '../../assets/Image/arrowLeft.svg';
 
 // ============ КОМПОНЕНТ КОРЗИНЫ ============
 const CartButton = ({ total, onPress }) => {
@@ -35,24 +34,21 @@ const CartButton = ({ total, onPress }) => {
   );
 };
 
-
-
-
 // ============ МАЛЕНЬКИЕ КОМПОНЕНТЫ ДЛЯ КАЖДОЙ ВКЛАДКИ ============
 
-// Обновленный компонент для главной страницы
-const HomeContent = ({ textSearch, setTextSearch, isLoading }) => {
+// Компонент для главной страницы
+const HomeContent = ({ textSearch, setTextSearch, isLoading, navigation, cartItems, setCartItems, cartQuantities, setCartQuantities }) => {
   const insets = useSafeAreaInsets();
   const [activeCategory, setActiveCategory] = useState('all');
   const [products, setProducts] = useState([]);
+  const [banners, setBanners] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [cartItems, setCartItems] = useState([]); // Состояние для корзины
 
-  // Загружаем товары при монтировании
   useEffect(() => {
     loadProducts();
+    loadBanners();
   }, []);
 
   const loadProducts = async () => {
@@ -91,7 +87,33 @@ const HomeContent = ({ textSearch, setTextSearch, isLoading }) => {
     }
   };
 
-  // Фильтрация товаров по категории
+  const loadBanners = async () => {
+    try {
+      const token = await AsyncStorage.getItem("userToken");
+      
+      const response = await fetch(
+        "http://2.nntc.nnov.ru:8900/api/collections/promotions_and_news/records?page=1&perPage=30",
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          }
+        },
+      );
+
+      const data = await response.json();
+      setBanners(data.items || []);
+    } catch (error) {
+      console.error('Ошибка загрузки баннеров:', error);
+    }
+  };
+
+  const getBannerImageUrl = (banner) => {
+    if (!banner || !banner.newsImage) return null;
+    return `http://2.nntc.nnov.ru:8900/api/files/${banner.collectionId}/${banner.id}/${banner.newsImage}`;
+  };
+
   const getFilteredProducts = () => {
     if (activeCategory === 'all') {
       return products;
@@ -106,28 +128,34 @@ const HomeContent = ({ textSearch, setTextSearch, isLoading }) => {
     return products.filter(product => product.category === targetCategory);
   };
 
-  // Проверка, есть ли товар в корзине
   const isInCart = (productId) => {
     return cartItems.some(item => item.id === productId);
   };
 
-  // Добавление товара в корзину
   const addToCart = (product) => {
     setCartItems(prev => [...prev, { 
       id: product.id, 
       title: product.title, 
       price: product.priceValue 
     }]);
+    setCartQuantities(prev => ({
+      ...prev,
+      [product.id]: 1
+    }));
   };
 
-  // Удаление товара из корзины
   const removeFromCart = (productId) => {
     setCartItems(prev => prev.filter(item => item.id !== productId));
+    const newQuantities = { ...cartQuantities };
+    delete newQuantities[productId];
+    setCartQuantities(newQuantities);
   };
 
-  // Подсчет общей суммы
-  const getTotalPrice = () => {
-    return cartItems.reduce((sum, item) => sum + item.price, 0);
+  const calculateTotal = () => {
+    return cartItems.reduce((sum, item) => {
+      const quantity = cartQuantities[item.id] || 1;
+      return sum + (item.price * quantity);
+    }, 0);
   };
 
   const handleAddPress = (product) => {
@@ -199,7 +227,6 @@ const HomeContent = ({ textSearch, setTextSearch, isLoading }) => {
         contentContainerStyle={styles.scrollViewContent}
       >
         <View style={styles.contentContainer}>
-          {/* Поле поиска */}
           <View style={styles.headerSection}>
             <View style={styles.searchContainer}>
               <Image 
@@ -216,7 +243,6 @@ const HomeContent = ({ textSearch, setTextSearch, isLoading }) => {
             </View>
           </View>
 
-          {/* Блок Акции и новости */}
           <View style={styles.promotionsSection}>
             <Text style={styles.sectionTitle}>Акции и новости</Text>
             <ScrollView 
@@ -224,20 +250,37 @@ const HomeContent = ({ textSearch, setTextSearch, isLoading }) => {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.horizontalScrollContent}
             >
-              <TouchableOpacity activeOpacity={0.9} style={styles.bannerWrapper}>
-                <Banner1 width="100%" height="100%" />
-              </TouchableOpacity>
-              <TouchableOpacity activeOpacity={0.9} style={styles.bannerWrapper}>
-                <Banner2 width="100%" height="100%" />
-              </TouchableOpacity>
+              {banners.map((banner, index) => {
+                const imageUrl = getBannerImageUrl(banner);
+                return (
+                  <TouchableOpacity 
+                    key={banner.id || index}
+                    activeOpacity={0.9} 
+                    style={styles.bannerWrapper}
+                    onPress={() => {
+                      console.log('Нажат баннер:', banner);
+                    }}
+                  >
+                    {imageUrl ? (
+                      <Image 
+                        source={{ uri: imageUrl }}
+                        style={styles.bannerImage}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={[styles.bannerImage, styles.bannerPlaceholder]}>
+                        <Text style={styles.bannerPlaceholderText}>Нет изображения</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           </View>
 
-          {/* Блок Каталог описаний */}
           <View style={styles.catalogSection}>
             <Text style={styles.sectionTitle}>Каталог описаний</Text>
             
-            {/* Кнопки категорий */}
             <View style={styles.categoryButtons}>
               <TouchableOpacity 
                 style={[
@@ -279,7 +322,6 @@ const HomeContent = ({ textSearch, setTextSearch, isLoading }) => {
               </TouchableOpacity>
             </View>
 
-            {/* Карточки */}
             <View style={styles.cardsGrid}>
               {getFilteredProducts().map(renderCard)}
             </View>
@@ -287,13 +329,13 @@ const HomeContent = ({ textSearch, setTextSearch, isLoading }) => {
         </View>
       </ScrollView>
 
-      {/* Кнопка корзины */}
-      <CartButton total={getTotalPrice()} onPress={() => {
-        // Здесь будет переход в корзину
-        console.log('Переход в корзину', cartItems);
+      <CartButton total={calculateTotal()} onPress={() => {
+        navigation.navigate('Cart', { 
+          cartItems: cartItems,
+          cartQuantities: cartQuantities
+        });
       }} />
 
-      {/* Модальное окно с информацией о товаре */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -357,19 +399,15 @@ const HomeContent = ({ textSearch, setTextSearch, isLoading }) => {
   );
 };
 
-
-
 // Компонент для каталога
-const CatalogContent = ({ textSearch, setTextSearch, isLoading, setActiveTab  }) => {
+const CatalogContent = ({ textSearch, setTextSearch, isLoading, setActiveTab, navigation, cartItems, setCartItems, cartQuantities, setCartQuantities,  setActiveContent }) => {
   const insets = useSafeAreaInsets();
   const [activeCategory, setActiveCategory] = useState('all');
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [cartItems, setCartItems] = useState([]); // 👈 Добавляем состояние корзины
 
-  // Загружаем товары при монтировании
   useEffect(() => {
     loadProducts();
   }, []);
@@ -410,7 +448,6 @@ const CatalogContent = ({ textSearch, setTextSearch, isLoading, setActiveTab  })
     }
   };
 
-  // Фильтрация товаров по категории
   const getFilteredProducts = () => {
     if (activeCategory === 'all') {
       return products;
@@ -425,7 +462,6 @@ const CatalogContent = ({ textSearch, setTextSearch, isLoading, setActiveTab  })
     return products.filter(product => product.category === targetCategory);
   };
 
-  // 👇 Функции для работы с корзиной
   const isInCart = (productId) => {
     return cartItems.some(item => item.id === productId);
   };
@@ -436,14 +472,24 @@ const CatalogContent = ({ textSearch, setTextSearch, isLoading, setActiveTab  })
       title: product.title, 
       price: product.priceValue 
     }]);
+    setCartQuantities(prev => ({
+      ...prev,
+      [product.id]: 1
+    }));
   };
 
   const removeFromCart = (productId) => {
     setCartItems(prev => prev.filter(item => item.id !== productId));
+    const newQuantities = { ...cartQuantities };
+    delete newQuantities[productId];
+    setCartQuantities(newQuantities);
   };
 
-  const getTotalPrice = () => {
-    return cartItems.reduce((sum, item) => sum + item.price, 0);
+  const calculateTotal = () => {
+    return cartItems.reduce((sum, item) => {
+      const quantity = cartQuantities[item.id] || 1;
+      return sum + (item.price * quantity);
+    }, 0);
   };
 
   const handleAddPress = (product) => {
@@ -515,7 +561,6 @@ const CatalogContent = ({ textSearch, setTextSearch, isLoading, setActiveTab  })
         contentContainerStyle={styles.scrollViewContent}
       >
         <View style={styles.contentContainer}>
-          {/* Поле поиска с иконкой профиля */}
           <View style={styles.headerSection}>
             <View style={styles.searchRow}>
               <View style={styles.searchContainer}>
@@ -533,7 +578,10 @@ const CatalogContent = ({ textSearch, setTextSearch, isLoading, setActiveTab  })
               </View>
               <TouchableOpacity 
                 style={styles.profileIconContainer}
-                onPress={() => setActiveTab('profile')}
+                onPress={() => {
+                  setActiveTab('profile') 
+                  setActiveContent('profile');
+                }}
               >
                 <Image 
                   source={require('../../assets/Image/mainProfile.png')} 
@@ -543,9 +591,7 @@ const CatalogContent = ({ textSearch, setTextSearch, isLoading, setActiveTab  })
             </View>
           </View>
 
-          {/* Блок Каталог описаний */}
           <View style={styles.catalogSection}>
-            {/* Кнопки категорий */}
             <View style={styles.categoryButtons}>
               <TouchableOpacity 
                 style={[
@@ -587,7 +633,6 @@ const CatalogContent = ({ textSearch, setTextSearch, isLoading, setActiveTab  })
               </TouchableOpacity>
             </View>
 
-            {/* Карточки */}
             <View style={styles.cardsGrid}>
               {getFilteredProducts().map(renderCard)}
             </View>
@@ -595,12 +640,13 @@ const CatalogContent = ({ textSearch, setTextSearch, isLoading, setActiveTab  })
         </View>
       </ScrollView>
 
-      {/* Кнопка корзины */}
-      <CartButton total={getTotalPrice()} onPress={() => {
-        console.log('Переход в корзину', cartItems);
+      <CartButton total={calculateTotal()} onPress={() => {
+        navigation.navigate('Cart', { 
+          cartItems: cartItems,
+          cartQuantities: cartQuantities
+        });
       }} />
 
-      {/* Модальное окно с информацией о товаре */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -664,14 +710,537 @@ const CatalogContent = ({ textSearch, setTextSearch, isLoading, setActiveTab  })
   );
 };
 
-// Компонент для проектов
-const ProjectContent = () => (
-  <View style={styles.centerContent}>
-    <Text style={styles.bigEmoji}>📁</Text>
-    <Text style={styles.title}>Проекты</Text>
-    <Text style={styles.subtitle}>Здесь будут ваши проекты</Text>
-  </View>
-);
+// Компонент для списка проектов
+const ProjectListContent = ({ navigation, setActiveTab, setActiveContent  }) => {
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+  const loadProjects = async () => {
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem("userToken");
+      
+      const response = await fetch(
+        "http://2.nntc.nnov.ru:8900/api/collections/projects/records?page=1&perPage=30",
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          }
+        },
+      );
+
+      const data = await response.json();
+      setProjects(data.items || []);
+    } catch (error) {
+      console.error('Ошибка загрузки проектов:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}.${month}.${year}`;
+  };
+
+  const renderProjectCard = (project) => {
+    const createdDate = formatDate(project.created);
+    
+    return (
+      <View key={project.id} style={styles.projectCard}>
+        <View style={styles.projectCardContent}>
+          <Text style={styles.projectTitle}>{project.title}</Text>
+          <View style={styles.projectFooter}>
+            <Text style={styles.projectDate}>Создан: {createdDate}</Text>
+            <TouchableOpacity 
+              style={styles.openButton}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.openButtonText}>Открыть</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.centerContent}>
+        <Text>Загрузка проектов...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView 
+      style={styles.scrollView}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={styles.scrollViewContent}
+    >
+      <View style={styles.contentContainer}>
+        <View style={styles.projectsHeader}>
+          <Text style={styles.projectsTitle}>Проекты</Text>
+          <TouchableOpacity 
+            style={styles.addButtonPlus}
+            onPress={() => {
+              setActiveContent('createProject'); // меняем контент
+              setActiveTab('project'); // сохраняем подсветку вкладки "Проекты"
+            }}
+          >
+            <PlusIcon width={20} height={20} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.projectsList}>
+          {projects.length === 0 ? (
+            <View style={styles.emptyProjects}>
+              <Text style={styles.emptyProjectsText}>У вас пока нет проектов</Text>
+              <Text style={styles.emptyProjectsSubtext}>Нажмите + чтобы создать первый проект</Text>
+            </View>
+          ) : (
+            projects.map(renderProjectCard)
+          )}
+        </View>
+      </View>
+    </ScrollView>
+  );
+};
+
+// Компонент для создания проекта
+const CreateProjectContent = ({ setActiveTab, setActiveContent }) => {
+  const insets = useSafeAreaInsets();
+  
+  const [projectTitle, setProjectTitle] = useState('');
+  const [projectType, setProjectType] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [projectSize, setProjectSize] = useState('');
+  const [descriptionSource, setDescriptionSource] = useState('');
+  const [projectCategory, setProjectCategory] = useState('');
+  const [technicalDrawing, setTechnicalDrawing] = useState(null);
+  const [imageUri, setImageUri] = useState(null);
+  
+  const [typeModalVisible, setTypeModalVisible] = useState(false);
+  const [sizeModalVisible, setSizeModalVisible] = useState(false);
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  
+  const [isStartDatePickerVisible, setStartDatePickerVisible] = useState(false);
+  const [isEndDatePickerVisible, setEndDatePickerVisible] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const typeOptions = [
+    { label: "Публичный", value: "public" },
+    { label: "Приватный", value: "private" },
+  ];
+  
+  const sizeOptions = [
+    { label: "Мужское", value: "male" },
+    { label: "Женское", value: "female" },
+  ];
+  
+  const categoryOptions = [
+    { label: "Шапки", value: "hats" },
+    { label: "Кофты", value: "sweaters" },
+    { label: "Футболки", value: "t-shirts" },
+    { label: "Штаны", value: "pants" },
+    { label: "Кроссовки", value: "sneakers" },
+  ];
+
+  const isFormValid = () => {
+    return projectTitle.trim() !== "" &&
+           projectType !== "" &&
+           startDate !== "" &&
+           endDate !== "" &&
+           projectSize !== "" &&
+           descriptionSource.trim() !== "" &&
+           projectCategory !== "";
+  };
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Ошибка', 'Нужно разрешение на доступ к галерее');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setImageUri(result.assets[0].uri);
+      setTechnicalDrawing(result.assets[0].uri);
+    }
+  };
+
+  const formatDateForApi = (dateString) => {
+    if (!dateString) return '';
+    const [day, month, year] = dateString.split('.');
+    return `${year}-${month}-${day}`;
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}.${month}.${year}`;
+  };
+
+  const handleStartDateConfirm = (date) => {
+    const formatted = formatDate(date);
+    setStartDate(formatted);
+    setStartDatePickerVisible(false);
+  };
+
+  const handleEndDateConfirm = (date) => {
+    const formatted = formatDate(date);
+    setEndDate(formatted);
+    setEndDatePickerVisible(false);
+  };
+
+  const handleCreateProject = async () => {
+    if (!isFormValid()) {
+      Alert.alert("Ошибка", "Заполните все поля");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const token = await AsyncStorage.getItem("userToken");
+      const userId = await AsyncStorage.getItem("userId");
+      
+      const formData = new FormData();
+      formData.append('title', projectTitle);
+      formData.append('type', projectType);
+      formData.append('date_start', formatDateForApi(startDate));
+      formData.append('date_end', formatDateForApi(endDate));
+      formData.append('size', projectSize);
+      formData.append('description_source', descriptionSource);
+      formData.append('user_id', userId);
+      
+      if (technicalDrawing) {
+        formData.append('technical_drawing', {
+          uri: technicalDrawing,
+          type: 'image/jpeg',
+          name: 'drawing.jpg',
+        });
+      }
+
+      const response = await fetch(
+        "http://2.nntc.nnov.ru:8900/api/collections/projects/records",
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          },
+          body: formData
+        },
+      );
+
+      if (response.ok) {
+        Alert.alert("Успех", "Проект успешно создан");
+        setActiveContent('project'); // 👈 возвращаемся к списку проектов
+        setActiveTab('project');
+      } else {
+        const errorData = await response.json();
+        Alert.alert("Ошибка", errorData.message || "Не удалось создать проект");
+      }
+    } catch (error) {
+      console.error('Ошибка создания проекта:', error);
+      Alert.alert("Ошибка", "Не удалось создать проект");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <>
+      <ScrollView 
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollViewContent}
+      >
+        <View style={styles.contentContainer}>
+          <View style={styles.createHeader}>
+            <Text style={styles.createTitle}>Создать проект</Text>
+          </View>
+
+          <View style={styles.createForm}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Тип проекта</Text>
+              <TouchableOpacity
+                style={styles.createInput}
+                onPress={() => setTypeModalVisible(true)}
+              >
+                <Text style={[styles.createInputText, !projectType && styles.placeholderText]}>
+                  {projectType ? typeOptions.find(o => o.value === projectType)?.label : "Выберите тип"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Название проекта</Text>
+              <TextInput
+                style={styles.createInput}
+                placeholder="Введите название"
+                value={projectTitle}
+                onChangeText={setProjectTitle}
+                placeholderTextColor="#9ca3af"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Дата начала</Text>
+              <TouchableOpacity
+                style={styles.createInput}
+                onPress={() => setStartDatePickerVisible(true)}
+              >
+                <Text style={[styles.createInputText, !startDate && styles.placeholderText]}>
+                  {startDate || "Выберите дату"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Дата окончания</Text>
+              <TouchableOpacity
+                style={styles.createInput}
+                onPress={() => setEndDatePickerVisible(true)}
+              >
+                <Text style={[styles.createInputText, !endDate && styles.placeholderText]}>
+                  {endDate || "Выберите дату"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Кому</Text>
+              <TouchableOpacity
+                style={styles.createInput}
+                onPress={() => setSizeModalVisible(true)}
+              >
+                <Text style={[styles.createInputText, !projectSize && styles.placeholderText]}>
+                  {projectSize ? sizeOptions.find(o => o.value === projectSize)?.label : "Выберите кому"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Источник описания</Text>
+              <TextInput
+                style={styles.createInput}
+                placeholder="example@mail.com"
+                value={descriptionSource}
+                onChangeText={setDescriptionSource}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                placeholderTextColor="#9ca3af"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Категория</Text>
+              <TouchableOpacity
+                style={styles.createInput}
+                onPress={() => setCategoryModalVisible(true)}
+              >
+                <Text style={[styles.createInputText, !projectCategory && styles.placeholderText]}>
+                  {projectCategory ? categoryOptions.find(o => o.value === projectCategory)?.label : "Выберите категорию"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <TouchableOpacity 
+                style={styles.imagePicker}
+                onPress={pickImage}
+              >
+                {imageUri ? (
+                  <Image 
+                    source={{ uri: imageUri }} 
+                    style={styles.imagePickerPreview}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <>
+                    <Text style={styles.imagePickerText}>+</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.confirmButton, (!isFormValid() || isSubmitting) && styles.disabledButton]}
+              onPress={handleCreateProject}
+              disabled={!isFormValid() || isSubmitting}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.confirmButtonText}>Подтвердить</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+
+      <DateTimePicker
+        isVisible={isStartDatePickerVisible}
+        mode="date"
+        onConfirm={handleStartDateConfirm}
+        onCancel={() => setStartDatePickerVisible(false)}
+        maximumDate={new Date()}
+        confirmTextIOS="Выбрать"
+        cancelTextIOS="Отмена"
+        headerTextIOS="Выберите дату начала"
+      />
+
+      <DateTimePicker
+        isVisible={isEndDatePickerVisible}
+        mode="date"
+        onConfirm={handleEndDateConfirm}
+        onCancel={() => setEndDatePickerVisible(false)}
+        minimumDate={startDate ? new Date(formatDateForApi(startDate)) : undefined}
+        confirmTextIOS="Выбрать"
+        cancelTextIOS="Отмена"
+        headerTextIOS="Выберите дату окончания"
+      />
+
+      {/* Модальное окно для типа */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={typeModalVisible}
+        onRequestClose={() => setTypeModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setTypeModalVisible(false)}
+          />
+          <View style={styles.modalContentSmall}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Выберите тип</Text>
+              <TouchableOpacity onPress={() => setTypeModalVisible(false)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            {typeOptions.map((option) => (
+              <TouchableOpacity
+                key={option.value}
+                style={[styles.optionItem, projectType === option.value && styles.optionItemActive]}
+                onPress={() => {
+                  setProjectType(option.value);
+                  setTypeModalVisible(false);
+                }}
+              >
+                <Text style={[styles.optionText, projectType === option.value && styles.optionTextActive]}>
+                  {option.label}
+                </Text>
+                {projectType === option.value && <Text style={styles.checkmark}>✓</Text>}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Модальное окно для размера (кому) */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={sizeModalVisible}
+        onRequestClose={() => setSizeModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setSizeModalVisible(false)}
+          />
+          <View style={styles.modalContentSmall}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Кому</Text>
+              <TouchableOpacity onPress={() => setSizeModalVisible(false)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            {sizeOptions.map((option) => (
+              <TouchableOpacity
+                key={option.value}
+                style={[styles.optionItem, projectSize === option.value && styles.optionItemActive]}
+                onPress={() => {
+                  setProjectSize(option.value);
+                  setSizeModalVisible(false);
+                }}
+              >
+                <Text style={[styles.optionText, projectSize === option.value && styles.optionTextActive]}>
+                  {option.label}
+                </Text>
+                {projectSize === option.value && <Text style={styles.checkmark}>✓</Text>}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Модальное окно для категории */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={categoryModalVisible}
+        onRequestClose={() => setCategoryModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setCategoryModalVisible(false)}
+          />
+          <View style={styles.modalContentSmall}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Категория</Text>
+              <TouchableOpacity onPress={() => setCategoryModalVisible(false)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            {categoryOptions.map((option) => (
+              <TouchableOpacity
+                key={option.value}
+                style={[styles.optionItem, projectCategory === option.value && styles.optionItemActive]}
+                onPress={() => {
+                  setProjectCategory(option.value);
+                  setCategoryModalVisible(false);
+                }}
+              >
+                <Text style={[styles.optionText, projectCategory === option.value && styles.optionTextActive]}>
+                  {option.label}
+                </Text>
+                {projectCategory === option.value && <Text style={styles.checkmark}>✓</Text>}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+};
 
 // Компонент для профиля
 const ProfileContent = ({ userName, userEmail, notificationsEnabled, toggleNotifications, clearAsyncStorage }) => (
@@ -681,7 +1250,6 @@ const ProfileContent = ({ userName, userEmail, notificationsEnabled, toggleNotif
       <Text style={styles.userEmail}>{userEmail}</Text>
     </View>
 
-    {/* Кнопка Мои заказы */}
     <TouchableOpacity style={styles.ordersButton}>
       <Image 
         source={require('../../assets/Image/notebook.png')} 
@@ -690,7 +1258,6 @@ const ProfileContent = ({ userName, userEmail, notificationsEnabled, toggleNotif
       <Text style={styles.ordersButtonText}>Мои заказы</Text>
     </TouchableOpacity>
 
-    {/* Секция уведомлений */}
     <View style={styles.notificationsContainer}>
       <View style={styles.notificationsLeftContainer}>
         <Image 
@@ -705,7 +1272,6 @@ const ProfileContent = ({ userName, userEmail, notificationsEnabled, toggleNotif
       />
     </View>
 
-    {/* Блок с юридической информацией и выходом */}
     <View style={styles.bottomBlock}>
       <TouchableOpacity>
         <Text style={styles.legalText}>Политика конфиденциальности</Text>
@@ -731,16 +1297,37 @@ export default function HomeScreen({ navigation }) {
   const [userName, setUserName] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [textSearch, setTextSearch] = useState("")
+  const [textSearch, setTextSearch] = useState("");
   const [activeTab, setActiveTab] = useState('home');
+  const [activeContent, setActiveContent] = useState('home');
+  const [cartItems, setCartItems] = useState([]);
+  const [cartQuantities, setCartQuantities] = useState({});
 
-  // Загружаем данные при монтировании компоненaта
   useEffect(() => {
     loadUserData();
-    loadNotificationSetting(); // 👈 Загружаем настройку уведомлений
+    loadNotificationSetting();
   }, []);
 
-  // Загрузка данных пользователя
+  useEffect(() => {
+    if (navigation && navigation.getState) {
+      const unsubscribe = navigation.addListener('focus', () => {
+        const state = navigation.getState();
+        const routes = state?.routes;
+        const currentRoute = routes?.[routes.length - 1];
+        
+        if (currentRoute?.params?.updatedCartItems) {
+          setCartItems(currentRoute.params.updatedCartItems);
+          if (currentRoute.params.updatedQuantities) {
+            setCartQuantities(currentRoute.params.updatedQuantities);
+          }
+          navigation.setParams({ updatedCartItems: undefined, updatedQuantities: undefined });
+        }
+      });
+      
+      return unsubscribe;
+    }
+  }, [navigation]);
+
   const loadUserData = async () => {
     try {
       const userId = await AsyncStorage.getItem("userId");
@@ -765,7 +1352,6 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  // 👇 НОВАЯ ФУНКЦИЯ: Загрузка настройки уведомлений
   const loadNotificationSetting = async () => {
     try {
       const savedNotificationSetting = await AsyncStorage.getItem('notificationsEnabled');
@@ -777,7 +1363,6 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  // 👇 НОВАЯ ФУНКЦИЯ: Сохранение настройки уведомлений
   const saveNotificationSetting = async (value) => {
     try {
       await AsyncStorage.setItem('notificationsEnabled', JSON.stringify(value));
@@ -786,11 +1371,10 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  // Обновленная функция переключения уведомлений
   const toggleNotifications = () => {
     setNotificationsEnabled(previousState => {
       const newState = !previousState;
-      saveNotificationSetting(newState); // 👈 Сохраняем новое состояние
+      saveNotificationSetting(newState);
       return newState;
     });
   };
@@ -804,7 +1388,6 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  // Функция для отображения правильной иконки
   const renderIcon = (tabName) => {
     const iconProps = {
       width: 76,
@@ -833,14 +1416,18 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  // Рендерим активный компонент
   const renderActiveContent = () => {
-    switch (activeTab) {
+    switch (activeContent) {
       case 'home':
         return <HomeContent 
           textSearch={textSearch}
           setTextSearch={setTextSearch}
-          isLoading={false} // или передайте реальное состояние isLoading если есть
+          isLoading={false}
+          navigation={navigation}
+          cartItems={cartItems}
+          setCartItems={setCartItems}
+          cartQuantities={cartQuantities}
+          setCartQuantities={setCartQuantities}
         />;
       case 'catalog':
         return <CatalogContent
@@ -848,9 +1435,24 @@ export default function HomeScreen({ navigation }) {
           setTextSearch={setTextSearch}
           isLoading={false}
           setActiveTab={setActiveTab}
+          navigation={navigation}
+          cartItems={cartItems}
+          setCartItems={setCartItems}
+          cartQuantities={cartQuantities}
+          setCartQuantities={setCartQuantities}
+          setActiveContent={setActiveContent}
         />;
       case 'project':
-        return <ProjectContent />;
+        return <ProjectListContent 
+          navigation={navigation} 
+          setActiveTab={setActiveTab} 
+          setActiveContent={setActiveContent}
+        />;
+      case 'createProject':
+        return <CreateProjectContent 
+          setActiveTab={setActiveTab}
+          setActiveContent={setActiveContent}
+        />;
       case 'profile':
         return <ProfileContent 
           userName={userName} 
@@ -866,7 +1468,6 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Основной контент с учетом безопасной зоны */}
       <View 
         style={[
           styles.mainContent,
@@ -881,7 +1482,6 @@ export default function HomeScreen({ navigation }) {
         {renderActiveContent()}
       </View>
 
-      {/* Нижняя навигация с учетом безопасной зоны снизу */}
       <View 
         style={[
           styles.bottomNavigation,
@@ -890,28 +1490,40 @@ export default function HomeScreen({ navigation }) {
       >
         <TouchableOpacity 
           style={styles.tabItem}
-          onPress={() => setActiveTab('home')}
+          onPress={() => {
+            setActiveTab('home');
+            setActiveContent('home');
+          }}
         >
           {renderIcon('home')}
         </TouchableOpacity>
 
         <TouchableOpacity 
           style={styles.tabItem}
-          onPress={() => setActiveTab('catalog')}
+          onPress={() => {
+            setActiveTab('catalog');
+            setActiveContent('catalog');
+          }}
         >
           {renderIcon('catalog')}
         </TouchableOpacity>
 
         <TouchableOpacity 
           style={styles.tabItem}
-          onPress={() => setActiveTab('project')}
+          onPress={() => {
+            setActiveTab('project');
+            setActiveContent('project');
+          }}
         >
           {renderIcon('project')}
         </TouchableOpacity>
 
         <TouchableOpacity 
           style={styles.tabItem}
-          onPress={() => setActiveTab('profile')}
+          onPress={() => {
+            setActiveTab('profile');
+            setActiveContent('profile');
+          }}
         >
           {renderIcon('profile')}
         </TouchableOpacity>
@@ -936,7 +1548,6 @@ const styles = StyleSheet.create({
     color: '#939396',
     marginBottom: 24,
   },
-  // Стили для баннеров
   promotionsSection: {
     marginBottom: 24,
   },
@@ -952,10 +1563,23 @@ const styles = StyleSheet.create({
   },
   bannerWrapper: {
     width: 300,
-    height: 152,
+    height: 200,
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: '#fff',
+    backgroundColor: '#F5F5F9',
+  },
+  bannerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  bannerPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F9',
+  },
+  bannerPlaceholderText: {
+    fontSize: 14,
+    color: '#939396',
   },
   mainContent: {
     flex: 1,
@@ -1010,7 +1634,7 @@ const styles = StyleSheet.create({
   cardsGrid: {
     gap: 12,
     paddingBottom: 20,
-    marginBottom: 42
+    marginBottom: 42,
   },
   card: {
     borderRadius: 16,
@@ -1055,8 +1679,6 @@ const styles = StyleSheet.create({
   },
   addButton: {
     backgroundColor: '#2074F2',
-    // paddingVertical: 10,
-    // paddingHorizontal: 20,
     width: 96,
     height: 40,
     alignItems: 'center',
@@ -1064,19 +1686,31 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignSelf: 'center',
   },
+  addButtonPlus: {
+    position: 'absolute',
+    right: 0
+  },
   addButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
   },
+  removeButton: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#1A6FEE',
+  },
+  removeButtonText: {
+    color: '#1A6FEE',
+  },
   searchContainer: {
-    flex: 1, // Это гарантирует, что поиск займет все доступное пространство слева от иконки
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: "#EBEBEB",
+    borderColor: '#EBEBEB',
     borderRadius: 12,
-    backgroundColor: "#F5F5F9",
+    backgroundColor: '#F5F5F9',
     paddingHorizontal: 12,
     marginBottom: 24,
   },
@@ -1131,7 +1765,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 16,
-    marginBottom: 24
+    marginBottom: 24,
   },
   notificationsLeftContainer: {
     flexDirection: 'row',
@@ -1191,31 +1825,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flex: 1,
     paddingVertical: 4,
-    paddingBottom: 15
+    paddingBottom: 15,
   },
-  // Обновленные стили для модального окна
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: "white",
+    backgroundColor: 'white',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: "80%",
+    maxHeight: '80%',
   },
   modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 20,
     paddingBottom: 0,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: "600",
-    color: "#000000",
+    fontWeight: '600',
+    color: '#000000',
     flex: 1,
     marginRight: 10,
   },
@@ -1223,13 +1856,13 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 18,
-    backgroundColor: "#F5F5F9",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: '#F5F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   closeButton: {
     fontSize: 12,
-    color: "#6b7280",
+    color: '#6b7280',
     lineHeight: 12,
   },
   modalBody: {
@@ -1237,47 +1870,46 @@ const styles = StyleSheet.create({
   },
   modalLabel: {
     fontSize: 16,
-    fontWeight: "500",
-    color: "#939396",
+    fontWeight: '500',
+    color: '#939396',
     marginBottom: 4,
   },
   modalLabelApproximate: {
     fontSize: 14,
-    fontWeight: "400",
-    color: "#939396",
+    fontWeight: '400',
+    color: '#939396',
     marginBottom: 4,
   },
   modalText: {
     fontSize: 15,
     fontWeight: '400',
-    color: "#000000",
+    color: '#000000',
     lineHeight: 20,
     marginBottom: 36,
   },
   modalTextApproximate: {
     fontSize: 16,
     fontWeight: '500',
-    color: "#000000",
+    color: '#000000',
     lineHeight: 20,
     marginBottom: -8,
   },
   modalButton: {
-    backgroundColor: "#1A6FEE",
+    backgroundColor: '#1A6FEE',
     borderRadius: 12,
     padding: 16,
     marginHorizontal: 20,
     marginTop: 8,
     marginBottom: 20,
     minHeight: 56,
-    justifyContent: "center",
+    justifyContent: 'center',
   },
   modalButtonText: {
-    color: "#FFFFFF",
-    textAlign: "center",
-    fontWeight: "600",
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontWeight: '600',
     fontSize: 17,
   },
-  // Новые стили для строки поиска с иконкой профиля
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1298,10 +1930,9 @@ const styles = StyleSheet.create({
     height: 48,
     resizeMode: 'contain',
   },
-  // Стили для кнопки корзины
   cartButton: {
     position: 'absolute',
-    bottom: 20, // Высота над нижней навигацией
+    bottom: 20,
     left: 24,
     right: 24,
     backgroundColor: '#1A6FEE',
@@ -1331,14 +1962,217 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-  // Стиль для кнопки "Убрать"
-  removeButton: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#1A6FEE',
+  projectsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    marginTop: 12,
   },
-  // Стиль для текста кнопки "Убрать"
-  removeButtonText: {
+  projectsTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  projectsList: {
+    gap: 16,
+  },
+  projectCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#F4F4F4',
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  projectCardContent: {
+    gap: 12,
+  },
+  projectTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#000000',
+    marginBottom: 20
+  },
+  projectFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  projectDate: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#939396',
+  },
+  openButton: {
+    backgroundColor: '#1A6FEE',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+  },
+  openButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  emptyProjects: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyProjectsText: {
+    fontSize: 16,
+    color: '#939396',
+    marginBottom: 8,
+  },
+  emptyProjectsSubtext: {
+    fontSize: 14,
+    color: '#C9C9C9',
+  },
+  createModalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '90%',
+  },
+  createModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  createModalBody: {
+    flex: 1,
+  },
+  createModalBodyContent: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#7E7E9A',
+    marginBottom: 8,
+  },
+  createInput: {
+    borderWidth: 1,
+    borderColor: '#EBEBEB',
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
+    backgroundColor: '#F5F5F9',
+    justifyContent: 'center',
+  },
+  createInputText: {
+    fontSize: 15,
+    color: '#1f2937',
+  },
+  imagePicker: {
+    width: 200,
+    height: 200,
+    borderWidth: 1,
+    borderColor: '#EBEBEB',
+    borderRadius: 12,
+    backgroundColor: '#F5F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    alignSelf: 'center',
+  },
+  imagePickerPreview: {
+    width: '100%',
+    height: '100%',
+  },
+  imagePickerText: {
+    fontSize: 40,
+    color: '#939396',
+  },
+  imagePickerHint: {
+    fontSize: 12,
+    color: '#939396',
+    marginTop: 8,
+  },
+  confirmButton: {
+    backgroundColor: '#1A6FEE',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 24,
+    minHeight: 56,
+    justifyContent: 'center',
+  },
+  confirmButtonText: {
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontWeight: '600',
+    fontSize: 17,
+  },
+  disabledButton: {
+    backgroundColor: '#C9D4FB',
+  },
+  modalContentSmall: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '50%',
+  },
+  placeholderText: {
+    color: '#9ca3af',
+  },
+  optionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  optionItemActive: {
+    backgroundColor: '#f0f9ff',
+  },
+  optionText: {
+    fontSize: 16,
+    color: '#374151',
+  },
+  optionTextActive: {
     color: '#1A6FEE',
+    fontWeight: '500',
+  },
+  checkmark: {
+    color: '#1A6FEE',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  createHeader: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    marginTop: 12,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  createTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  createForm: {
+    marginTop: 12,
   },
 });
